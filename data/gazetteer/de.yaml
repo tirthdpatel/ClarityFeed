@@ -1,0 +1,19 @@
+country: DE
+aliases:
+  - {alias: "germany",   type: name,    weight: 1.0}
+  - {alias: "deutschland", type: name,  weight: 1.0}
+  - {alias: "german",    type: demonym, weight: 0.8}
+  - {alias: "germans",   type: demonym, weight: 0.8}
+  - {alias: "berlin",    type: capital, weight: 0.9}
+  - {alias: "munich",    type: city,    weight: 0.9}
+  - {alias: "hamburg",   type: city,    weight: 0.9}
+  - {alias: "frankfurt", type: city,    weight: 0.9}
+  - {alias: "cologne",   type: city,    weight: 0.9}
+  - {alias: "stuttgart", type: city,    weight: 0.6}
+  - {alias: "dusseldorf", type: city,   weight: 0.6}
+  - {alias: "bavaria",   type: region,  weight: 0.9}
+  - {alias: "saxony",    type: region,  weight: 0.9}
+  - {alias: "bundestag", type: institution, weight: 1.0}
+  - {alias: "bundesbank", type: institution, weight: 0.9}
+  - {alias: "dax",       type: institution, weight: 0.9}
+  - {alias: "chancellor", type: institution, weight: 0.2}

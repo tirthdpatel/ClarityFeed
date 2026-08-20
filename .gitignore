@@ -1,0 +1,73 @@
+# Environment
+.env
+.env.local
+.env.production
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Testing
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node (frontend)
+node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+
+# Logs
+*.log
+
+# ---- Secrets (Phase 0 hardening) -------------------------------------------
+# .env is already listed above; these cover the variants that actually leak.
+.env.*
+!.env.example
+*.env
+.envrc
+.direnv/
+secrets/
+*.key
+*.pem
+*.p12
+*.pfx
+*credentials*.json
+service-account*.json
+.supabase/
+# Never commit a raw connection string dropped into a scratch file
+connection_string.txt
+db_url.txt
+
+# ---- Local backups / transfer artefacts ------------------------------------
+_backup_pre_phase0/
+_to_delete/
+*.tar.gz
+*.zip
+*.sqlite
+*.sqlite3
+*.db
+!alembic/**/*.py

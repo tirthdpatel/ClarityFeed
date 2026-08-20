@@ -1,0 +1,22 @@
+country: BR
+aliases:
+  - {alias: "brazil",       type: name,    weight: 1.0}
+  - {alias: "brasil",       type: name,    weight: 1.0}
+  - {alias: "brazilian",    type: demonym, weight: 0.8}
+  - {alias: "brasilia",     type: capital, weight: 0.9}
+  - {alias: "sao paulo",    type: city,    weight: 0.9}
+  - {alias: "são paulo",    type: city,    weight: 0.9}
+  - {alias: "rio de janeiro", type: city,  weight: 0.9}
+  - {alias: "salvador",     type: city,    weight: 0.4, ambiguous: true,
+     context: ["brazil","brazilian","bahia"]}
+  - {alias: "belo horizonte", type: city,  weight: 0.6}
+  - {alias: "amazon rainforest", type: region, weight: 0.9}
+  - {alias: "bahia",        type: region,  weight: 0.9}
+  - {alias: "minas gerais", type: region,  weight: 0.9}
+  - {alias: "real",         type: currency, weight: 0.2, ambiguous: true,
+     context: ["brazil","brazilian","central bank of brazil"]}
+  - {alias: "bovespa",      type: institution, weight: 0.9}
+  - {alias: "planalto",     type: institution, weight: 0.9}
+  # "Amazon" alone is far more often the company than the rainforest.
+  - {alias: "amazon", type: region, weight: 0.2, ambiguous: true,
+     context: ["rainforest","deforestation","brazil","brazilian","indigenous","basin"]}

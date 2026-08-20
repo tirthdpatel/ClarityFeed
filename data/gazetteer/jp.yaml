@@ -1,0 +1,17 @@
+country: JP
+aliases:
+  - {alias: "japan",     type: name,    weight: 1.0}
+  - {alias: "japanese",  type: demonym, weight: 0.8}
+  - {alias: "tokyo",     type: capital, weight: 0.9}
+  - {alias: "osaka",     type: city,    weight: 0.9}
+  - {alias: "kyoto",     type: city,    weight: 0.9}
+  - {alias: "yokohama",  type: city,    weight: 0.9}
+  - {alias: "nagoya",    type: city,    weight: 0.6}
+  - {alias: "fukuoka",   type: city,    weight: 0.6}
+  - {alias: "hokkaido",  type: region,  weight: 0.9}
+  - {alias: "okinawa",   type: region,  weight: 0.9}
+  - {alias: "diet",      type: institution, weight: 0.2, ambiguous: true,
+     context: ["japan","japanese","tokyo","lower house","upper house"]}
+  - {alias: "bank of japan", type: institution, weight: 0.9}
+  - {alias: "nikkei",    type: institution, weight: 0.9}
+  - {alias: "yen",       type: currency, weight: 0.4}

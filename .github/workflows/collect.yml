@@ -1,0 +1,55 @@
+# ============================================================================
+# RSS Collection Trigger — GitHub Actions Cron Workflow
+# ============================================================================
+#
+# WHAT THIS DOES:
+#   Triggers the ClarityFeed RSS collection cycle every 15 minutes by sending
+#   an HTTP POST to the Render backend's /internal/collect endpoint.
+#
+# REQUIRED GITHUB SECRETS (set in repo → Settings → Secrets → Actions):
+#   RENDER_BACKEND_URL  — The full Render service URL
+#                         e.g. https://news-aggregator-backend.onrender.com
+#   INTERNAL_SECRET     — The shared secret token (must match the value set
+#                         in the Render environment variables dashboard)
+#
+# HOW TO FIND THE RENDER URL:
+#   After deploying to Render, go to your service's dashboard. The URL
+#   is shown at the top of the page, e.g. https://your-service.onrender.com
+#
+# COLD START BEHAVIOR:
+#   Render free tier sleeps after 15 minutes of inactivity. The first request
+#   after sleep may take 30-60 seconds. This workflow retries up to 3 times
+#   with 30-second delays to handle cold starts gracefully.
+# ============================================================================
+
+name: RSS Collection Trigger
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  trigger-collection:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger collection cycle on Render
+        env:
+          RENDER_BACKEND_URL: ${{ secrets.RENDER_BACKEND_URL }}
+          INTERNAL_SECRET: ${{ secrets.INTERNAL_SECRET }}
+        run: |
+          # Retry up to 3 times to handle Render cold start
+          for i in 1 2 3; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              -X POST "$RENDER_BACKEND_URL/internal/collect" \
+              -H "X-Internal-Secret: $INTERNAL_SECRET" \
+              --max-time 60)
+            if [ "$STATUS" = "200" ]; then
+              echo "Collection triggered successfully"
+              exit 0
+            fi
+            echo "Attempt $i failed with status $STATUS. Waiting 30s..."
+            sleep 30
+          done
+          echo "All attempts failed"
+          exit 1

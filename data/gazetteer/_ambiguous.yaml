@@ -1,0 +1,70 @@
+# Cross-country alias conflicts.
+#
+# Some strings are claimed by more than one country and cannot be resolved
+# inside a single country file. This registry is advisory: the classifier
+# reads it to apply an extra penalty when two countries both match on
+# aliases listed here, forcing the decision down to Tier 3's margin check
+# rather than letting a coin-flip win.
+#
+# Format: the surface string, then every country that legitimately claims it.
+
+conflicts:
+  - alias: "georgia"
+    claimants: ["US", "GE"]
+    note: "US state vs the Caucasus country. Highest-volume trap in the set."
+  - alias: "london"
+    claimants: ["GB", "CA"]
+    note: "England vs Ontario. UK dominates news volume by a wide margin."
+  - alias: "birmingham"
+    claimants: ["GB", "US"]
+    note: "England vs Alabama."
+  - alias: "perth"
+    claimants: ["AU", "GB"]
+    note: "Western Australia vs Scotland. Australia dominates."
+  - alias: "sydney"
+    claimants: ["AU", "CA"]
+    note: "Australia vs Nova Scotia. Australia dominates."
+  - alias: "victoria"
+    claimants: ["AU", "CA", "SC"]
+    note: "Australian state vs BC city vs Seychelles capital."
+  - alias: "newcastle"
+    claimants: ["GB", "AU"]
+    note: "Tyne vs New South Wales."
+  - alias: "cambridge"
+    claimants: ["GB", "US"]
+    note: "Cambridgeshire vs Massachusetts."
+  - alias: "oxford"
+    claimants: ["GB", "US"]
+    note: "Oxfordshire vs Mississippi/Ohio."
+  - alias: "hyderabad"
+    claimants: ["IN", "PK"]
+    note: "Telangana vs Sindh."
+  - alias: "punjab"
+    claimants: ["IN", "PK"]
+    note: "Straddles the border; both sides are legitimately Punjab."
+  - alias: "kashmir"
+    claimants: ["IN", "PK"]
+    note: "Disputed. Editorially sensitive — prefer flagging both over guessing."
+  - alias: "salvador"
+    claimants: ["BR", "SV"]
+    note: "Bahia city vs El Salvador."
+  - alias: "santiago"
+    claimants: ["CL", "ES"]
+    note: "Chilean capital vs Santiago de Compostela."
+
+# Aliases that are ordinary English words. These must ALWAYS be gated on
+# context regardless of which country claims them — an ungated match here
+# produces the most embarrassing failures.
+common_word_aliases:
+  - "nice"       # France
+  - "reading"    # England
+  - "bath"       # England
+  - "turkey"     # the bird
+  - "jordan"     # given name / surname
+  - "chad"       # given name
+  - "china"      # porcelain
+  - "real"       # Brazilian currency / adjective
+  - "rand"       # South African currency / surname
+  - "amazon"     # the company
+  - "diet"       # Japan's legislature / nutrition
+  - "congress"   # US legislature / Indian political party

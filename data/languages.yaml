@@ -1,0 +1,99 @@
+# Languages offered to readers.
+#
+# `native_name` is not decoration. A language switcher that lists "Hindi" to
+# someone who only reads Hindi is a broken language switcher — it must say
+# हिन्दी.
+#
+# `direction` drives <html dir> and the logical-property CSS. Arabic is in the
+# launch set deliberately: it forces RTL into scope now, while it is nearly
+# free, rather than as a retrofit later, when it is genuinely miserable.
+# See ARCHITECTURE_V3.md §B6.
+#
+# `translation_tier`:
+#   none  — no translation, original text only
+#   argos — local Argos Translate in the Actions runner (free, unlimited)
+#   azure — Azure Translator F0 quality tier, top clusters only (2M chars/mo)
+# Promote a language to `azure` when it earns the traffic; demote when it
+# does not. No code change either way.
+
+- code: en
+  name: English
+  native_name: English
+  direction: ltr
+  translation_tier: none      # source language for most of the corpus
+  is_enabled: true
+  sort_order: 10
+
+- code: hi
+  name: Hindi
+  native_name: हिन्दी
+  direction: ltr
+  translation_tier: azure
+  is_enabled: true
+  sort_order: 20
+
+- code: es
+  name: Spanish
+  native_name: Español
+  direction: ltr
+  translation_tier: azure
+  is_enabled: true
+  sort_order: 30
+
+- code: ar
+  name: Arabic
+  native_name: العربية
+  direction: rtl
+  translation_tier: azure
+  is_enabled: true
+  sort_order: 40
+
+- code: fr
+  name: French
+  native_name: Français
+  direction: ltr
+  translation_tier: argos
+  is_enabled: true
+  sort_order: 50
+
+- code: pt
+  name: Portuguese
+  native_name: Português
+  direction: ltr
+  translation_tier: argos
+  is_enabled: true
+  sort_order: 60
+
+# Staged for Phase 6 — defined so the schema and UI can be exercised against
+# more than one RTL language, but disabled so they do not appear yet.
+- code: ur
+  name: Urdu
+  native_name: اردو
+  direction: rtl
+  translation_tier: argos
+  is_enabled: false
+  sort_order: 70
+
+- code: bn
+  name: Bengali
+  native_name: বাংলা
+  direction: ltr
+  translation_tier: argos
+  is_enabled: false
+  sort_order: 80
+
+- code: de
+  name: German
+  native_name: Deutsch
+  direction: ltr
+  translation_tier: argos
+  is_enabled: false
+  sort_order: 90
+
+- code: ja
+  name: Japanese
+  native_name: 日本語
+  direction: ltr
+  translation_tier: argos
+  is_enabled: false
+  sort_order: 100

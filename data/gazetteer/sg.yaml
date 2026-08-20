@@ -1,0 +1,14 @@
+country: SG
+aliases:
+  - {alias: "singapore",    type: name,    weight: 1.0}
+  - {alias: "singaporean",  type: demonym, weight: 0.8}
+  - {alias: "singaporeans", type: demonym, weight: 0.8}
+  - {alias: "marina bay",   type: city,    weight: 0.9}
+  - {alias: "jurong",       type: city,    weight: 0.9}
+  - {alias: "sentosa",      type: city,    weight: 0.9}
+  - {alias: "changi",       type: city,    weight: 0.9}
+  - {alias: "monetary authority of singapore", type: institution, weight: 1.0}
+  - {alias: "temasek",      type: institution, weight: 0.9}
+  - {alias: "sgx",          type: institution, weight: 0.9}
+  - {alias: "singapore dollar", type: currency, weight: 0.4}
+  - {alias: "people's action party", type: institution, weight: 0.9}

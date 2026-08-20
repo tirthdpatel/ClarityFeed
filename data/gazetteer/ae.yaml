@@ -1,0 +1,19 @@
+country: AE
+aliases:
+  - {alias: "united arab emirates", type: name, weight: 1.0}
+  - {alias: "uae",         type: name,    weight: 1.0}
+  - {alias: "emirati",     type: demonym, weight: 0.8}
+  - {alias: "emiratis",    type: demonym, weight: 0.8}
+  - {alias: "abu dhabi",   type: capital, weight: 0.9}
+  - {alias: "dubai",       type: city,    weight: 0.9}
+  - {alias: "sharjah",     type: city,    weight: 0.9}
+  - {alias: "ajman",       type: city,    weight: 0.9}
+  - {alias: "ras al khaimah", type: city, weight: 0.9}
+  - {alias: "fujairah",    type: city,    weight: 0.9}
+  - {alias: "dirham",      type: currency, weight: 0.4}
+  - {alias: "adnoc",       type: institution, weight: 0.9}
+  - {alias: "emirates airline", type: institution, weight: 0.6}
+  - {alias: "dfm",         type: institution, weight: 0.6}
+  # "Emirates" alone is often the airline or a generic plural.
+  - {alias: "emirates", type: name, weight: 0.2, ambiguous: true,
+     context: ["uae","united arab emirates","abu dhabi","dubai","gulf"]}

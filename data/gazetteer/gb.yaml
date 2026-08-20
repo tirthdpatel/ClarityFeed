@@ -1,0 +1,54 @@
+country: GB
+aliases:
+  - {alias: "united kingdom",  type: name,    weight: 1.0}
+  - {alias: "britain",         type: name,    weight: 0.9}
+  - {alias: "great britain",   type: name,    weight: 1.0}
+  - {alias: "u.k.",            type: name,    weight: 0.9}
+  - {alias: "british",         type: demonym, weight: 0.8}
+  - {alias: "england",         type: region,  weight: 0.9}
+  - {alias: "scotland",        type: region,  weight: 0.9}
+  - {alias: "wales",           type: region,  weight: 0.9}
+  - {alias: "northern ireland", type: region, weight: 0.9}
+  - {alias: "english",         type: demonym, weight: 0.2}
+  - {alias: "scottish",        type: demonym, weight: 0.8}
+  - {alias: "welsh",           type: demonym, weight: 0.8}
+  - {alias: "westminster",     type: institution, weight: 0.9}
+  - {alias: "downing street",  type: institution, weight: 0.9}
+  - {alias: "house of commons", type: institution, weight: 0.9}
+  - {alias: "house of lords",  type: institution, weight: 0.9}
+  - {alias: "nhs",             type: institution, weight: 0.9}
+  - {alias: "bank of england", type: institution, weight: 0.9}
+  - {alias: "ftse",            type: institution, weight: 0.9}
+  - {alias: "manchester",      type: city,    weight: 0.6}
+  - {alias: "glasgow",         type: city,    weight: 0.9}
+  - {alias: "edinburgh",       type: city,    weight: 0.9}
+  - {alias: "liverpool",       type: city,    weight: 0.6}
+  - {alias: "leeds",           type: city,    weight: 0.6}
+  - {alias: "cardiff",         type: city,    weight: 0.9}
+  - {alias: "belfast",         type: city,    weight: 0.9}
+  - {alias: "west midlands",   type: region,  weight: 0.9}
+  - {alias: "yorkshire",       type: region,  weight: 0.9}
+  - {alias: "merseyside",      type: region,  weight: 0.9}
+  - {alias: "perthshire",      type: region,  weight: 0.9}
+  - {alias: "pound sterling",  type: currency, weight: 0.4}
+  # London, England vs London, Ontario. The Ontario one is far rarer in news,
+  # so this keeps a decent weight but still gates on context.
+  - {alias: "london", type: capital, weight: 0.6, ambiguous: true,
+     context: ["uk","u.k.","britain","british","england","westminster","downing street","thames","heathrow"]}
+  - {alias: "birmingham", type: city, weight: 0.4, ambiguous: true,
+     context: ["uk","u.k.","britain","british","england","west midlands"]}
+  - {alias: "newcastle", type: city, weight: 0.4, ambiguous: true,
+     context: ["uk","u.k.","britain","british","england","tyne"]}
+  - {alias: "cambridge", type: city, weight: 0.2, ambiguous: true,
+     context: ["uk","u.k.","britain","england","cambridgeshire"]}
+  - {alias: "oxford", type: city, weight: 0.2, ambiguous: true,
+     context: ["uk","u.k.","britain","england","oxfordshire"]}
+  # Perth, Scotland vs Perth, Western Australia — the Australian one dominates
+  # news volume, so the UK entry is weak and tightly gated.
+  - {alias: "perth", type: city, weight: 0.2, ambiguous: true,
+     context: ["scotland","scottish","tayside","perthshire"]}
+  # Common English words that are also place names.
+  - {alias: "reading", type: city, weight: 0.2, ambiguous: true,
+     context: ["berkshire","thames valley","reading fc"]}
+  - {alias: "bath", type: city, weight: 0.2, ambiguous: true,
+     context: ["somerset","bath spa","north east somerset"]}

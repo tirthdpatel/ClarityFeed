@@ -1,0 +1,80 @@
+# Country classification evaluation set.
+#
+# HONEST LABEL: these are hand-written cases modelled on real headline
+# patterns, NOT sampled from the live corpus. They exist to lock in behaviour
+# on the known ambiguity traps and to make threshold changes measurable.
+#
+# They are NOT a substitute for the 200-article gold set in ARCHITECTURE_V3
+# Part F9. That has to come from real ingested articles, hand-labelled, and
+# it is the only thing that can tell you the true accuracy rate. Treat the
+# numbers from this file as a regression check, not as an accuracy claim.
+#
+# `expect`: expected primary country, or null to mean "should abstain".
+# `must_not`: countries that must NOT be primary — the trap being guarded.
+# `tags`: trap category, for per-trap reporting.
+
+cases:
+  # ---- unambiguous baselines ----
+  - {title: "Modi announces new infrastructure policy in New Delhi", expect: "IN", tags: [baseline]}
+  - {title: "Bundestag approves budget after late-night session in Berlin", expect: "DE", tags: [baseline]}
+  - {title: "Reserve Bank of Australia holds rates steady", expect: "AU", tags: [baseline]}
+  - {title: "Singapore's Temasek reports annual returns", expect: "SG", tags: [baseline]}
+  - {title: "Brazilian officials meet in Brasilia over Amazon deforestation", expect: "BR", tags: [baseline]}
+  - {title: "Eskom announces load shedding across Gauteng", expect: "ZA", tags: [baseline]}
+  - {title: "Bank of Japan signals shift in yen policy", expect: "JP", tags: [baseline]}
+  - {title: "Abu Dhabi's ADNOC expands refinery capacity", expect: "AE", tags: [baseline]}
+  - {title: "Ottawa unveils new immigration targets", expect: "CA", tags: [baseline]}
+  - {title: "Elysee confirms the French president will attend", expect: "FR", tags: [baseline]}
+
+  # ---- Georgia: US state vs Caucasus country ----
+  - {title: "Georgia Senate race tightens as Atlanta turnout surges", expect: "US", tags: [georgia]}
+  - {title: "Georgia governor signs education bill", description: "The measure passed the state legislature in Atlanta", expect: "US", tags: [georgia]}
+  - {title: "Georgia protests continue for a third night in Tbilisi", expect: null, must_not: ["US"], tags: [georgia]}
+  - {title: "Georgian officials summoned the ambassador in Tbilisi", expect: null, must_not: ["US"], tags: [georgia]}
+
+  # ---- London: England vs Ontario ----
+  - {title: "London mayor announces Thames crossing plan", expect: "GB", tags: [london]}
+  - {title: "Westminster debates the bill as London braces for strikes", expect: "GB", tags: [london]}
+  - {title: "London Ontario council approves transit funding", description: "The Canadian city expands its bus network", expect: "CA", tags: [london]}
+
+  # ---- Perth: Western Australia vs Scotland ----
+  - {title: "Perth records hottest day as Western Australia swelters", expect: "AU", tags: [perth]}
+  - {title: "Perth council meets in Perthshire over Scottish funding", expect: "GB", tags: [perth]}
+
+  # ---- Sydney: Australia vs Nova Scotia ----
+  - {title: "Sydney Opera House marks anniversary as New South Wales celebrates", expect: "AU", tags: [sydney]}
+  - {title: "Sydney Nova Scotia port expansion approved in Cape Breton", expect: "CA", tags: [sydney]}
+
+  # ---- Victoria: Australian state vs BC city ----
+  - {title: "Victoria state government announces Melbourne rail upgrade", expect: "AU", tags: [victoria]}
+  - {title: "Victoria British Columbia ferry service disrupted on Vancouver Island", expect: "CA", tags: [victoria]}
+
+  # ---- Birmingham: England vs Alabama ----
+  - {title: "Birmingham West Midlands council declares bankruptcy", expect: "GB", tags: [birmingham]}
+  - {title: "Birmingham Alabama police release statement", description: "The American city responds", expect: "US", tags: [birmingham]}
+
+  # ---- Congress: US legislature vs Indian party ----
+  - {title: "Congress passes spending bill as Senate returns to Washington", expect: "US", tags: [congress]}
+  - {title: "Congress party leader Rahul Gandhi addresses Lok Sabha", expect: "IN", tags: [congress]}
+
+  # ---- common words that are place names ----
+  - {title: "Nice weather expected across the region this weekend", expect: null, must_not: ["FR"], tags: [common-word]}
+  - {title: "Nice hosts summit on the Cote d'Azur as French officials gather", expect: "FR", tags: [common-word]}
+  - {title: "Reading the fine print on the new contract", expect: null, must_not: ["GB"], tags: [common-word]}
+  - {title: "Amazon reports record quarterly earnings", expect: null, must_not: ["BR"], tags: [common-word]}
+  - {title: "Amazon rainforest deforestation slows in Brazil", expect: "BR", tags: [common-word]}
+  - {title: "Turkey prices rise ahead of the holiday season", expect: null, must_not: ["TR"], tags: [common-word]}
+  - {title: "The diet industry faces new advertising rules", expect: null, must_not: ["JP"], tags: [common-word]}
+
+  # ---- multi-country / international ----
+  - {title: "India and Britain sign trade agreement", description: "Officials from New Delhi and London finalised terms", expect: null, tags: [bilateral], allow: ["IN","GB"]}
+  - {title: "G7 leaders meet as Germany France and Canada push for climate funding", expect: null, tags: [international], allow: ["DE","FR","CA"]}
+
+  # ---- should abstain entirely ----
+  - {title: "Scientists discover new species of deep-sea coral", expect: null, tags: [no-country]}
+  - {title: "Study finds link between sleep and memory retention", expect: null, tags: [no-country]}
+  - {title: "Markets rally on optimism over interest rates", expect: null, tags: [no-country]}
+
+  # ---- source prior should carry a country-less headline ----
+  - {title: "Council approves new budget for the coming year", source_country: "IN", expect: "IN", tags: [source-prior]}
+  - {title: "Regional transport strike enters second day", source_country: "DE", expect: "DE", tags: [source-prior]}

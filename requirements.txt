@@ -1,0 +1,46 @@
+# ---- Web Framework ----
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+
+# ---- RSS Ingestion ----
+feedparser==6.0.11
+httpx==0.27.0
+
+# ---- Article Extraction ----
+# newspaper3k==0.2.8 was pinned here and is UNINSTALLABLE on modern Python:
+# its jieba3k / tinysegmenter / feedfinder2 deps fail to build against current
+# setuptools, so `pip install -r requirements.txt` aborted outright.
+# newspaper4k is the maintained fork. API change: set_html() -> download(input_html=).
+newspaper4k==0.9.3.1
+readability-lxml==0.8.1
+beautifulsoup4==4.12.3
+lxml==5.2.1
+lxml_html_clean==0.3.1
+
+# ---- AI Inference (Cloud APIs — no local model loading) ----
+groq==0.9.0
+
+# ---- Semantic Similarity ----
+scikit-learn==1.5.0
+numpy==1.26.4
+
+# ---- Database ----
+sqlalchemy==2.0.30
+psycopg2-binary==2.9.9
+alembic==1.13.2  # Phase 0: incremental migrations, see alembic/versions/
+
+# ---- Data Validation ----
+pydantic==2.7.1
+pydantic-settings==2.2.1
+
+# ---- Configuration ----
+python-dotenv==1.0.1
+
+# ---- Testing ----
+pytest==8.2.0
+pytest-asyncio==0.23.6
+
+# ---- Ingestion-only deps live in requirements-ingest.txt ----
+# sentence-transformers/torch (~2 GB) and argostranslate are deliberately
+# NOT here: the read API never embeds or translates anything, and should
+# not pay torch cold-start for a stage it never runs.

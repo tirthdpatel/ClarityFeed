@@ -1,0 +1,44 @@
+# ---------------------------------------------------------------------------
+# Ingestion-only dependencies.
+#
+# WHY THIS FILE EXISTS
+#
+# sentence-transformers pulls in torch, which is roughly 2 GB installed. The
+# read API never embeds anything — embedding happens once per article, in
+# GitHub Actions, on the way in. Installing torch on the API host buys a
+# slower cold start, a larger image and nothing else. Render installs
+# requirements.txt; Actions installs this file.
+#
+#     requirements.txt          API + everything shared
+#     requirements-ingest.txt   this file: -r requirements.txt + the heavy bits
+#
+# THE CPU WHEEL IS NOT OPTIONAL. The default torch wheel bundles CUDA and is
+# ~5x the size, on a runner with no GPU. Install with:
+#
+#     pip install -r requirements-ingest.txt \
+#         --extra-index-url https://download.pytorch.org/whl/cpu
+#
+# ---------------------------------------------------------------------------
+
+-r requirements.txt
+
+# ---- Local embeddings (backend/deduplicator/local_embedder.py) ----
+# all-MiniLM-L6-v2, 384 dimensions, ~90 MB of model weights. Cache the
+# weights in Actions or every run re-downloads them.
+sentence-transformers~=3.0
+torch~=2.3
+
+# ---- Translation, below the publish barrier (ARCHITECTURE_V3 §B2) ----
+# Argos runs locally and offline, which is the entire reason it was chosen
+# over a translation API: a translation outage must not be able to reach
+# anything a reader can see.
+argostranslate~=1.9
+
+# ---------------------------------------------------------------------------
+# These three are compatible-release pins (~=) rather than the exact pins
+# used everywhere else in this project. Exact pins were not written blind:
+# torch and sentence-transformers move fast, and a stale exact pin fails the
+# build rather than degrading. LOCK THESE after the first green Actions run —
+# `pip freeze | grep -E 'torch|sentence-transformers|argostranslate'` — so CI
+# stops being able to change underneath you.
+# ---------------------------------------------------------------------------

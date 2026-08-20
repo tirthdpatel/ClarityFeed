@@ -1,0 +1,52 @@
+country: US
+aliases:
+  - {alias: "united states",     type: name,    weight: 1.0}
+  - {alias: "united states of america", type: name, weight: 1.0}
+  - {alias: "u.s.",              type: name,    weight: 0.9}
+  - {alias: "usa",               type: name,    weight: 0.9}
+  - {alias: "america",           type: name,    weight: 0.6}
+  - {alias: "american",          type: demonym, weight: 0.6}
+  - {alias: "americans",         type: demonym, weight: 0.6}
+  - {alias: "washington dc",     type: capital, weight: 0.9}
+  - {alias: "white house",       type: institution, weight: 0.9}
+  - {alias: "pentagon",          type: institution, weight: 0.9}
+  - {alias: "capitol hill",      type: institution, weight: 0.9}
+  - {alias: "new york",          type: city,    weight: 0.9}
+  - {alias: "los angeles",       type: city,    weight: 0.9}
+  - {alias: "san francisco",     type: city,    weight: 0.9}
+  - {alias: "chicago",           type: city,    weight: 0.9}
+  - {alias: "houston",           type: city,    weight: 0.6}
+  - {alias: "seattle",           type: city,    weight: 0.6}
+  - {alias: "philadelphia",      type: city,    weight: 0.6}
+  - {alias: "atlanta",           type: city,    weight: 0.9}
+  - {alias: "boston",            type: city,    weight: 0.9}
+  - {alias: "miami",             type: city,    weight: 0.9}
+  - {alias: "detroit",           type: city,    weight: 0.9}
+  - {alias: "denver",            type: city,    weight: 0.6}
+  - {alias: "phoenix",           type: city,    weight: 0.4, ambiguous: true,
+     context: ["arizona","united states","u.s.","american"]}
+  - {alias: "california",        type: region,  weight: 0.9}
+  - {alias: "texas",             type: region,  weight: 0.9}
+  - {alias: "florida",           type: region,  weight: 0.9}
+  - {alias: "ohio",              type: region,  weight: 0.6}
+  - {alias: "michigan",          type: region,  weight: 0.6}
+  # "Congress" is the US legislature AND the Indian National Congress party.
+  - {alias: "congress", type: institution, weight: 0.4, ambiguous: true,
+     context: ["united states","u.s.","american","senate","house of representatives","capitol","washington","republican","democrat"]}
+  - {alias: "federal reserve",   type: institution, weight: 0.9}
+  - {alias: "supreme court",     type: institution, weight: 0.2}
+  - {alias: "wall street",       type: institution, weight: 0.6}
+  - {alias: "nasdaq",            type: institution, weight: 0.6}
+  # Ambiguous: US state vs the country in the Caucasus. Context is what
+  # separates a Georgia election story from a Tbilisi protest story.
+  - {alias: "georgia", type: region, weight: 0.4, ambiguous: true,
+     context: ["atlanta","united states","u.s.","american","senate","governor","republican","democrat"]}
+  # Ambiguous: Birmingham, Alabama vs Birmingham, England.
+  - {alias: "birmingham", type: city, weight: 0.4, ambiguous: true,
+     context: ["alabama","united states","u.s.","american"]}
+  # Ambiguous: Cambridge MA vs Cambridge UK.
+  - {alias: "cambridge", type: city, weight: 0.2, ambiguous: true,
+     context: ["massachusetts","harvard","mit","boston"]}
+  # "Washington" alone is a state, a city, and a surname.
+  - {alias: "washington", type: city, weight: 0.4, ambiguous: true,
+     context: ["united states","u.s.","american","white house","congress","senate","biden","trump","state department"]}

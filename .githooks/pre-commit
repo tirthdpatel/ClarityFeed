@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+#
+# ClarityFeed pre-commit hook — blocks credentials from being committed.
+#
+# Version-controlled on purpose: a hook that lives only in .git/hooks exists
+# on exactly one machine and is lost on the next clone. Activate with:
+#
+#     ./scripts/install-hooks.sh
+#
+# or directly:
+#
+#     git config core.hooksPath .githooks
+#
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# 1. Refuse .env files outright, whatever .gitignore says.
+#    `git add -f .env` bypasses .gitignore; this does not.
+STAGED="$(git diff --cached --name-only --diff-filter=ACM || true)"
+BAD_ENV="$(echo "$STAGED" | grep -E '(^|/)\.env(\..*)?$' | grep -v '\.env\.example$' || true)"
+if [ -n "$BAD_ENV" ]; then
+    echo ""
+    echo -e "\033[1;31mBLOCKED: attempt to commit an environment file\033[0m"
+    echo ""
+    echo "$BAD_ENV" | sed 's/^/    /'
+    echo ""
+    echo "  .env holds live credentials and must never be committed."
+    echo "  Unstage it:  git restore --staged <file>"
+    echo ""
+    exit 1
+fi
+
+# 2. Scan staged content for credential patterns.
+if command -v python3 >/dev/null 2>&1; then
+    python3 scripts/check_secrets.py --staged
+else
+    echo "pre-commit: python3 not found — SECRET SCAN SKIPPED" >&2
+    echo "pre-commit: install python3 or run scripts/check_secrets.py manually" >&2
+fi

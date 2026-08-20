@@ -1,0 +1,94 @@
+# Category taxonomy — ARCHITECTURE_V3 Part C.
+#
+# 10 top-level, 38 children. `parent` is the parent's slug; top-level entries
+# omit it. This is seeded data in `category_defs`, NOT hardcoded — the brief
+# required categories be manageable without code changes, so the admin panel
+# owns this at runtime and this file is only the starting point.
+#
+# `keywords` drive the rule-based classifier. They are deliberately specific:
+# a keyword that fires on half the corpus is worse than no keyword at all.
+# Matching is case-insensitive on word boundaries over title + description.
+#
+# AI sits UNDER Technology, not beside it. Readers look for it there, and the
+# parent relationship means an AI article appears in Technology feeds without
+# a second assignment. `is_primary` on article_categories decides which one
+# leads; the parent is implied by the tree and never stored twice.
+
+# ---------------------------------------------------------------- top level
+- {slug: "world",       name: "World",                 sort_order: 10,  color_token: "cat-world"}
+- {slug: "politics",    name: "Politics",              sort_order: 20,  color_token: "cat-politics"}
+- {slug: "business",    name: "Business",              sort_order: 30,  color_token: "cat-business"}
+- {slug: "technology",  name: "Technology",            sort_order: 40,  color_token: "cat-tech"}
+- {slug: "science",     name: "Science",               sort_order: 50,  color_token: "cat-science"}
+- {slug: "health",      name: "Health",                sort_order: 60,  color_token: "cat-health"}
+- {slug: "sports",      name: "Sports",                sort_order: 70,  color_token: "cat-sports"}
+- {slug: "culture",     name: "Culture",               sort_order: 80,  color_token: "cat-culture"}
+- {slug: "environment", name: "Climate & Environment", sort_order: 90,  color_token: "cat-environment"}
+- {slug: "society",     name: "Society",               sort_order: 100, color_token: "cat-society"}
+
+# ------------------------------------------------------------------- World
+- {slug: "conflict",   name: "Conflict",   parent: "world", sort_order: 110, keywords: ["war","ceasefire","airstrike","offensive","insurgency","militants","troops","invasion","shelling"]}
+- {slug: "diplomacy",  name: "Diplomacy",  parent: "world", sort_order: 120, keywords: ["summit","treaty","sanctions","ambassador","bilateral","foreign minister","united nations","diplomatic"]}
+- {slug: "migration",  name: "Migration",  parent: "world", sort_order: 130, keywords: ["refugees","asylum","migrants","deportation","border crossing","displaced"]}
+- {slug: "disasters",  name: "Disasters",  parent: "world", sort_order: 140, keywords: ["earthquake","hurricane","cyclone","typhoon","wildfire","tsunami","landslide","evacuation"]}
+
+# ---------------------------------------------------------------- Politics
+- {slug: "elections",  name: "Elections",  parent: "politics", sort_order: 150, keywords: ["election","ballot","voters","polling","candidate","constituency","turnout","campaign trail"]}
+- {slug: "policy",               name: "Policy",     parent: "politics", sort_order: 160, keywords: ["legislation","parliamentary bill","reform package","national budget","policy framework","regulation","amendment"]}
+- {slug: "government", name: "Government", parent: "politics", sort_order: 170, keywords: ["parliament","cabinet","prime minister","president","congress","senate","minister","coalition"]}
+- {slug: "law",        name: "Law",        parent: "politics", sort_order: 180, keywords: ["supreme court","court ruling","lawsuit","verdict","judge ruled","prosecution","court appeal","tribunal"]}
+
+# ---------------------------------------------------------------- Business
+- {slug: "economy",    name: "Economy",    parent: "business", sort_order: 190, keywords: ["inflation","gdp","recession","interest rate","central bank","unemployment","fiscal"]}
+- {slug: "markets",    name: "Markets",    parent: "business", sort_order: 200, keywords: ["stocks","share price","stock index","nasdaq","bond yields","ipo","dividend","sensex","ftse"]}
+- {slug: "companies",  name: "Companies",  parent: "business", sort_order: 210, keywords: ["earnings","quarterly results","merger","acquisition","ceo","layoffs","revenue"]}
+- {slug: "startups",   name: "Startups",   parent: "business", sort_order: 220, keywords: ["startup","venture capital","series a","series b","funding round","unicorn","seed round"]}
+- {slug: "jobs",       name: "Jobs",       parent: "business", sort_order: 230, keywords: ["hiring","job cuts","labour market","wage growth","workers strike","trade union","workforce"]}
+- {slug: "trade",      name: "Trade",      parent: "business", sort_order: 240, keywords: ["tariffs","exports","imports","trade deal","supply chain","customs","wto"]}
+
+# -------------------------------------------------------------- Technology
+- {slug: "ai",            name: "AI",              parent: "technology", sort_order: 250, keywords: ["artificial intelligence","machine learning","llm","large language model","neural network","openai","anthropic","deepmind","generative ai","chatbot","gpu cluster"]}
+- {slug: "software",      name: "Software",        parent: "technology", sort_order: 260, keywords: ["software","mobile app","operating system","open source","developer","api","cloud platform"]}
+- {slug: "hardware",      name: "Hardware",        parent: "technology", sort_order: 270, keywords: ["chipmaker","semiconductor","processor","foundry","tsmc","nvidia","silicon","fabrication"]}
+- {slug: "cybersecurity", name: "Cybersecurity",   parent: "technology", sort_order: 280, keywords: ["hack","breach","ransomware","malware","vulnerability","phishing","zero-day","data leak"]}
+- {slug: "consumer-tech", name: "Consumer Tech",   parent: "technology", sort_order: 290, keywords: ["smartphone","laptop","wearable","gadget","launch event","iphone","android"]}
+- {slug: "crypto",        name: "Crypto",          parent: "technology", sort_order: 300, keywords: ["bitcoin","ethereum","cryptocurrency","blockchain","stablecoin","crypto token","defi"]}
+- {slug: "telecom",       name: "Telecom",         parent: "technology", sort_order: 310, keywords: ["5g","spectrum","broadband","telecom","fibre","satellite internet","starlink"]}
+
+# ----------------------------------------------------------------- Science
+- {slug: "space",     name: "Space",    parent: "science", sort_order: 320, keywords: ["nasa","isro","spacex","satellite launch","orbit","rocket","mars","lunar","telescope"]}
+- {slug: "research",  name: "Research", parent: "science", sort_order: 330, keywords: ["study finds","researchers","peer-reviewed","journal","experiment","scientists"]}
+- {slug: "physics",   name: "Physics",  parent: "science", sort_order: 340, keywords: ["quantum","particle","fusion","collider","cern","superconductor"]}
+- {slug: "biology",   name: "Biology",  parent: "science", sort_order: 350, keywords: ["genome","dna","animal species","evolutionary biology","crispr","microbiome","biodiversity"]}
+
+# ------------------------------------------------------------------ Health
+- {slug: "public-health", name: "Public Health", parent: "health", sort_order: 360, keywords: ["outbreak","epidemic","pandemic","vaccination","who","disease control","quarantine"]}
+- {slug: "medicine",      name: "Medicine",      parent: "health", sort_order: 370, keywords: ["clinical trial","drug approval","fda","medical treatment","gene therapy","surgery","diagnosis"]}
+- {slug: "mental-health", name: "Mental Health", parent: "health", sort_order: 380, keywords: ["mental health","depression","anxiety","therapy","wellbeing","burnout"]}
+
+# ------------------------------------------------------------------ Sports
+- {slug: "football",   name: "Football",   parent: "sports", sort_order: 390, keywords: ["premier league","la liga","fifa","uefa","champions league","world cup","goalkeeper"]}
+- {slug: "cricket",    name: "Cricket",    parent: "sports", sort_order: 400, keywords: ["cricket","test match","odi","t20","ipl","wicket","batsman","bowler"]}
+- {slug: "tennis",     name: "Tennis",     parent: "sports", sort_order: 410, keywords: ["wimbledon","grand slam","atp","wta","us open","roland garros"]}
+- {slug: "motorsport", name: "Motorsport", parent: "sports", sort_order: 420, keywords: ["formula 1","grand prix","motogp","rally championship","pole position"]}
+- {slug: "olympics",   name: "Olympics",   parent: "sports", sort_order: 430, keywords: ["olympics","olympic","paralympic","medal table","commonwealth games"]}
+- {slug: "athletics",  name: "Athletics",  parent: "sports", sort_order: 440, keywords: ["marathon","sprint final","athletics","track and field","world record"]}
+
+# ----------------------------------------------------------------- Culture
+- {slug: "film",  name: "Film",  parent: "culture", sort_order: 450, keywords: ["box office","film festival","director","oscars","cannes","streaming series","bollywood"]}
+- {slug: "music",  name: "Music", parent: "culture", sort_order: 460, keywords: ["new album","tour dates","grammy","chart-topping","concert","spotify"]}
+- {slug: "books",  name: "Books", parent: "culture", sort_order: 470, keywords: ["novel","booker prize","publisher","memoir","bestseller","literary"]}
+- {slug: "art",    name: "Art",   parent: "culture", sort_order: 480, keywords: ["exhibition","gallery","museum","auction","biennale","sculpture"]}
+- {slug: "food",   name: "Food",  parent: "culture", sort_order: 490, keywords: ["restaurant","michelin","local cuisine","head chef","recipe for","food culture"]}
+
+# ------------------------------------------------------------- Environment
+- {slug: "climate",  name: "Climate",  parent: "environment", sort_order: 500, keywords: ["climate change","emissions","global warming","cop29","cop30","carbon emissions","net zero","heatwave"]}
+- {slug: "energy",   name: "Energy",   parent: "environment", sort_order: 510, keywords: ["renewable","solar power","wind farm","oil prices","opec","nuclear plant","power grid","coal"]}
+- {slug: "wildlife", name: "Wildlife", parent: "environment", sort_order: 520, keywords: ["endangered","conservation","habitat","poaching","wildlife","extinction"]}
+- {slug: "pollution", name: "Pollution", parent: "environment", sort_order: 530, keywords: ["air quality","smog","plastic waste","contamination","aqi","pollution"]}
+
+# ----------------------------------------------------------------- Society
+- {slug: "education",    name: "Education",    parent: "society", sort_order: 540, keywords: ["school students","university","students","curriculum","exam results","tuition","admissions"]}
+- {slug: "crime",        name: "Crime",        parent: "society", sort_order: 550, keywords: ["arrested","police","investigation","fraud","homicide","trafficking","charged with"]}
+- {slug: "religion",     name: "Religion",     parent: "society", sort_order: 560, keywords: ["church","mosque","temple","pilgrimage","vatican","religious","clergy"]}
+- {slug: "human-rights", name: "Human Rights", parent: "society", sort_order: 570, keywords: ["human rights","discrimination","protesters","civil liberties","amnesty","activists"]}

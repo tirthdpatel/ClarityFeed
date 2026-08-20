@@ -1,0 +1,30 @@
+country: AU
+aliases:
+  - {alias: "australia",   type: name,    weight: 1.0}
+  - {alias: "australian",  type: demonym, weight: 0.8}
+  - {alias: "australians", type: demonym, weight: 0.8}
+  - {alias: "aussie",      type: demonym, weight: 0.6}
+  - {alias: "canberra",    type: capital, weight: 0.9}
+  - {alias: "melbourne",   type: city,    weight: 0.9}
+  - {alias: "brisbane",    type: city,    weight: 0.9}
+  - {alias: "adelaide",    type: city,    weight: 0.9}
+  - {alias: "queensland",  type: region,  weight: 0.9}
+  - {alias: "new south wales", type: region, weight: 0.9}
+  - {alias: "western australia", type: region, weight: 0.9}
+  - {alias: "tasmania",    type: region,  weight: 0.9}
+  - {alias: "northern territory", type: region, weight: 0.6}
+  - {alias: "outback",     type: region,  weight: 0.6}
+  - {alias: "reserve bank of australia", type: institution, weight: 0.9}
+  - {alias: "asx",         type: institution, weight: 0.9}
+  - {alias: "australian dollar", type: currency, weight: 0.4}
+  # Sydney, Australia dominates over Sydney, Nova Scotia — high weight, light gate.
+  - {alias: "sydney", type: city, weight: 0.6, ambiguous: true,
+     context: ["australia","australian","new south wales","nsw","harbour bridge","opera house"]}
+  # Perth, WA dominates over Perth, Scotland.
+  - {alias: "perth", type: city, weight: 0.6, ambiguous: true,
+     context: ["australia","australian","western australia","wa"]}
+  # Victoria the Australian state.
+  - {alias: "victoria", type: region, weight: 0.4, ambiguous: true,
+     context: ["australia","australian","melbourne","victorian government","state of victoria"]}
+  - {alias: "newcastle", type: city, weight: 0.2, ambiguous: true,
+     context: ["australia","australian","new south wales","hunter valley"]}

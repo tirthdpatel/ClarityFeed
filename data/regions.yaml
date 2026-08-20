@@ -1,0 +1,68 @@
+# Regions — the top level of the geography hierarchy.
+#
+# Roughly UN M49 subregions, with two deliberate departures:
+#   * "Middle East" is used instead of M49's "Western Asia" because that is
+#     what news organisations and readers call it.
+#   * Central America and the Caribbean are separate from North America,
+#     since they group very differently in news coverage.
+#
+# sort_order drives display order in the country selector: readers scan
+# regions in a rough west-to-east order, not alphabetically.
+
+- code: north-america
+  name: North America
+  sort_order: 10
+- code: central-america
+  name: Central America
+  sort_order: 20
+- code: caribbean
+  name: Caribbean
+  sort_order: 30
+- code: south-america
+  name: South America
+  sort_order: 40
+- code: northern-europe
+  name: Northern Europe
+  sort_order: 50
+- code: western-europe
+  name: Western Europe
+  sort_order: 60
+- code: southern-europe
+  name: Southern Europe
+  sort_order: 70
+- code: eastern-europe
+  name: Eastern Europe
+  sort_order: 80
+- code: north-africa
+  name: North Africa
+  sort_order: 90
+- code: west-africa
+  name: West Africa
+  sort_order: 100
+- code: central-africa
+  name: Central Africa
+  sort_order: 110
+- code: east-africa
+  name: East Africa
+  sort_order: 120
+- code: southern-africa
+  name: Southern Africa
+  sort_order: 130
+- code: middle-east
+  name: Middle East
+  sort_order: 140
+- code: central-asia
+  name: Central Asia
+  sort_order: 150
+- code: south-asia
+  name: South Asia
+  sort_order: 160
+- code: southeast-asia
+  name: Southeast Asia
+  sort_order: 170
+- code: east-asia
+  name: East Asia
+  sort_order: 180
+- code: oceania
+  name: Oceania
+  sort_order: 190

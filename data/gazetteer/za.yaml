@@ -1,0 +1,20 @@
+country: ZA
+aliases:
+  - {alias: "south africa",  type: name,    weight: 1.0}
+  - {alias: "south african", type: demonym, weight: 0.8}
+  - {alias: "pretoria",      type: capital, weight: 0.9}
+  - {alias: "cape town",     type: capital, weight: 0.9}
+  - {alias: "bloemfontein",  type: capital, weight: 0.9}
+  - {alias: "johannesburg",  type: city,    weight: 0.9}
+  - {alias: "durban",        type: city,    weight: 0.9}
+  - {alias: "soweto",        type: city,    weight: 0.9}
+  - {alias: "gauteng",       type: region,  weight: 0.9}
+  - {alias: "kwazulu-natal", type: region,  weight: 0.9}
+  - {alias: "western cape",  type: region,  weight: 0.9}
+  - {alias: "eastern cape",  type: region,  weight: 0.9}
+  - {alias: "rand",          type: currency, weight: 0.2, ambiguous: true,
+     context: ["south africa","south african","johannesburg","reserve bank"]}
+  - {alias: "anc",           type: institution, weight: 0.9}
+  - {alias: "african national congress", type: institution, weight: 1.0}
+  - {alias: "jse",           type: institution, weight: 0.9}
+  - {alias: "eskom",         type: institution, weight: 0.9}

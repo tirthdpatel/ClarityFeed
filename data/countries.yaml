@@ -1,0 +1,95 @@
+# Countries.
+#
+# `is_enabled: true` marks the 12 launch countries (ARCHITECTURE_V3 Part H).
+# The rest are seeded but hidden — better four good sources for twelve
+# countries than one dead feed for fifty. Enabling one is an admin-panel
+# toggle, not a migration.
+#
+# `default_language` is the language most of that country's coverage is
+# written in. It is a hint for the classifier and translation pipeline, not a
+# constraint — an English article about France is still about France.
+#
+# EVERY VALUE IS QUOTED ON PURPOSE. In YAML 1.1 the bare tokens NO, ON, OFF,
+# YES and N are booleans, so Norway's iso2 "NO" would silently load as False.
+# Quoting sidesteps the whole category.
+
+# ---- South Asia ----
+- {iso2: "IN", iso3: "IND", name: "India",      slug: "in", region: "south-asia", default_language: "hi", flag: "🇮🇳", is_enabled: true,  sort_order: 10}
+- {iso2: "PK", iso3: "PAK", name: "Pakistan",   slug: "pk", region: "south-asia", default_language: "ur", flag: "🇵🇰", is_enabled: false, sort_order: 20}
+- {iso2: "BD", iso3: "BGD", name: "Bangladesh", slug: "bd", region: "south-asia", default_language: "bn", flag: "🇧🇩", is_enabled: false, sort_order: 30}
+- {iso2: "LK", iso3: "LKA", name: "Sri Lanka",  slug: "lk", region: "south-asia", default_language: "si", flag: "🇱🇰", is_enabled: false, sort_order: 40}
+- {iso2: "NP", iso3: "NPL", name: "Nepal",      slug: "np", region: "south-asia", default_language: "ne", flag: "🇳🇵", is_enabled: false, sort_order: 50}
+
+# ---- East Asia ----
+- {iso2: "CN", iso3: "CHN", name: "China",       slug: "cn", region: "east-asia", default_language: "zh", flag: "🇨🇳", is_enabled: false, sort_order: 60}
+- {iso2: "JP", iso3: "JPN", name: "Japan",       slug: "jp", region: "east-asia", default_language: "ja", flag: "🇯🇵", is_enabled: true,  sort_order: 70}
+- {iso2: "KR", iso3: "KOR", name: "South Korea", slug: "kr", region: "east-asia", default_language: "ko", flag: "🇰🇷", is_enabled: false, sort_order: 80}
+- {iso2: "TW", iso3: "TWN", name: "Taiwan",      slug: "tw", region: "east-asia", default_language: "zh", flag: "🇹🇼", is_enabled: false, sort_order: 90}
+- {iso2: "HK", iso3: "HKG", name: "Hong Kong",   slug: "hk", region: "east-asia", default_language: "zh", flag: "🇭🇰", is_enabled: false, sort_order: 100}
+
+# ---- Southeast Asia ----
+- {iso2: "SG", iso3: "SGP", name: "Singapore",   slug: "sg", region: "southeast-asia", default_language: "en", flag: "🇸🇬", is_enabled: true,  sort_order: 110}
+- {iso2: "MY", iso3: "MYS", name: "Malaysia",    slug: "my", region: "southeast-asia", default_language: "ms", flag: "🇲🇾", is_enabled: false, sort_order: 120}
+- {iso2: "ID", iso3: "IDN", name: "Indonesia",   slug: "id", region: "southeast-asia", default_language: "id", flag: "🇮🇩", is_enabled: false, sort_order: 130}
+- {iso2: "TH", iso3: "THA", name: "Thailand",    slug: "th", region: "southeast-asia", default_language: "th", flag: "🇹🇭", is_enabled: false, sort_order: 140}
+- {iso2: "VN", iso3: "VNM", name: "Vietnam",     slug: "vn", region: "southeast-asia", default_language: "vi", flag: "🇻🇳", is_enabled: false, sort_order: 150}
+- {iso2: "PH", iso3: "PHL", name: "Philippines", slug: "ph", region: "southeast-asia", default_language: "en", flag: "🇵🇭", is_enabled: false, sort_order: 160}
+
+# ---- Middle East ----
+- {iso2: "AE", iso3: "ARE", name: "United Arab Emirates", slug: "ae", region: "middle-east", default_language: "ar", flag: "🇦🇪", is_enabled: true,  sort_order: 170}
+- {iso2: "SA", iso3: "SAU", name: "Saudi Arabia",         slug: "sa", region: "middle-east", default_language: "ar", flag: "🇸🇦", is_enabled: false, sort_order: 180}
+- {iso2: "IL", iso3: "ISR", name: "Israel",               slug: "il", region: "middle-east", default_language: "he", flag: "🇮🇱", is_enabled: false, sort_order: 190}
+- {iso2: "QA", iso3: "QAT", name: "Qatar",                slug: "qa", region: "middle-east", default_language: "ar", flag: "🇶🇦", is_enabled: false, sort_order: 200}
+- {iso2: "TR", iso3: "TUR", name: "Turkey",               slug: "tr", region: "middle-east", default_language: "tr", flag: "🇹🇷", is_enabled: false, sort_order: 210}
+- {iso2: "IR", iso3: "IRN", name: "Iran",                 slug: "ir", region: "middle-east", default_language: "fa", flag: "🇮🇷", is_enabled: false, sort_order: 220}
+
+# ---- Northern Europe ----
+- {iso2: "GB", iso3: "GBR", name: "United Kingdom", slug: "gb", region: "northern-europe", default_language: "en", flag: "🇬🇧", is_enabled: true,  sort_order: 230}
+- {iso2: "IE", iso3: "IRL", name: "Ireland",        slug: "ie", region: "northern-europe", default_language: "en", flag: "🇮🇪", is_enabled: false, sort_order: 240}
+- {iso2: "SE", iso3: "SWE", name: "Sweden",         slug: "se", region: "northern-europe", default_language: "sv", flag: "🇸🇪", is_enabled: false, sort_order: 250}
+- {iso2: "NO", iso3: "NOR", name: "Norway",         slug: "no", region: "northern-europe", default_language: "nb", flag: "🇳🇴", is_enabled: false, sort_order: 260}
+- {iso2: "DK", iso3: "DNK", name: "Denmark",        slug: "dk", region: "northern-europe", default_language: "da", flag: "🇩🇰", is_enabled: false, sort_order: 270}
+- {iso2: "FI", iso3: "FIN", name: "Finland",        slug: "fi", region: "northern-europe", default_language: "fi", flag: "🇫🇮", is_enabled: false, sort_order: 280}
+
+# ---- Western Europe ----
+- {iso2: "DE", iso3: "DEU", name: "Germany",     slug: "de", region: "western-europe", default_language: "de", flag: "🇩🇪", is_enabled: true,  sort_order: 290}
+- {iso2: "FR", iso3: "FRA", name: "France",      slug: "fr", region: "western-europe", default_language: "fr", flag: "🇫🇷", is_enabled: true,  sort_order: 300}
+- {iso2: "NL", iso3: "NLD", name: "Netherlands", slug: "nl", region: "western-europe", default_language: "nl", flag: "🇳🇱", is_enabled: false, sort_order: 310}
+- {iso2: "BE", iso3: "BEL", name: "Belgium",     slug: "be", region: "western-europe", default_language: "nl", flag: "🇧🇪", is_enabled: false, sort_order: 320}
+- {iso2: "CH", iso3: "CHE", name: "Switzerland", slug: "ch", region: "western-europe", default_language: "de", flag: "🇨🇭", is_enabled: false, sort_order: 330}
+- {iso2: "AT", iso3: "AUT", name: "Austria",     slug: "at", region: "western-europe", default_language: "de", flag: "🇦🇹", is_enabled: false, sort_order: 340}
+
+# ---- Southern Europe ----
+- {iso2: "IT", iso3: "ITA", name: "Italy",    slug: "it", region: "southern-europe", default_language: "it", flag: "🇮🇹", is_enabled: false, sort_order: 350}
+- {iso2: "ES", iso3: "ESP", name: "Spain",    slug: "es", region: "southern-europe", default_language: "es", flag: "🇪🇸", is_enabled: false, sort_order: 360}
+- {iso2: "PT", iso3: "PRT", name: "Portugal", slug: "pt", region: "southern-europe", default_language: "pt", flag: "🇵🇹", is_enabled: false, sort_order: 370}
+- {iso2: "GR", iso3: "GRC", name: "Greece",   slug: "gr", region: "southern-europe", default_language: "el", flag: "🇬🇷", is_enabled: false, sort_order: 380}
+
+# ---- Eastern Europe ----
+- {iso2: "PL", iso3: "POL", name: "Poland",  slug: "pl", region: "eastern-europe", default_language: "pl", flag: "🇵🇱", is_enabled: false, sort_order: 390}
+- {iso2: "UA", iso3: "UKR", name: "Ukraine", slug: "ua", region: "eastern-europe", default_language: "uk", flag: "🇺🇦", is_enabled: false, sort_order: 400}
+- {iso2: "RU", iso3: "RUS", name: "Russia",  slug: "ru", region: "eastern-europe", default_language: "ru", flag: "🇷🇺", is_enabled: false, sort_order: 410}
+
+# ---- North America ----
+- {iso2: "US", iso3: "USA", name: "United States", slug: "us", region: "north-america", default_language: "en", flag: "🇺🇸", is_enabled: true,  sort_order: 420}
+- {iso2: "CA", iso3: "CAN", name: "Canada",        slug: "ca", region: "north-america", default_language: "en", flag: "🇨🇦", is_enabled: true,  sort_order: 430}
+- {iso2: "MX", iso3: "MEX", name: "Mexico",        slug: "mx", region: "north-america", default_language: "es", flag: "🇲🇽", is_enabled: false, sort_order: 440}
+
+# ---- South America ----
+- {iso2: "BR", iso3: "BRA", name: "Brazil",    slug: "br", region: "south-america", default_language: "pt", flag: "🇧🇷", is_enabled: true,  sort_order: 450}
+- {iso2: "AR", iso3: "ARG", name: "Argentina", slug: "ar", region: "south-america", default_language: "es", flag: "🇦🇷", is_enabled: false, sort_order: 460}
+- {iso2: "CL", iso3: "CHL", name: "Chile",     slug: "cl", region: "south-america", default_language: "es", flag: "🇨🇱", is_enabled: false, sort_order: 470}
+- {iso2: "CO", iso3: "COL", name: "Colombia",  slug: "co", region: "south-america", default_language: "es", flag: "🇨🇴", is_enabled: false, sort_order: 480}
+
+# ---- Africa ----
+- {iso2: "ZA", iso3: "ZAF", name: "South Africa", slug: "za", region: "southern-africa", default_language: "en", flag: "🇿🇦", is_enabled: true,  sort_order: 490}
+- {iso2: "NG", iso3: "NGA", name: "Nigeria",      slug: "ng", region: "west-africa",     default_language: "en", flag: "🇳🇬", is_enabled: false, sort_order: 500}
+- {iso2: "GH", iso3: "GHA", name: "Ghana",        slug: "gh", region: "west-africa",     default_language: "en", flag: "🇬🇭", is_enabled: false, sort_order: 510}
+- {iso2: "KE", iso3: "KEN", name: "Kenya",        slug: "ke", region: "east-africa",     default_language: "en", flag: "🇰🇪", is_enabled: false, sort_order: 520}
+- {iso2: "ET", iso3: "ETH", name: "Ethiopia",     slug: "et", region: "east-africa",     default_language: "am", flag: "🇪🇹", is_enabled: false, sort_order: 530}
+- {iso2: "EG", iso3: "EGY", name: "Egypt",        slug: "eg", region: "north-africa",    default_language: "ar", flag: "🇪🇬", is_enabled: false, sort_order: 540}
+- {iso2: "MA", iso3: "MAR", name: "Morocco",      slug: "ma", region: "north-africa",    default_language: "ar", flag: "🇲🇦", is_enabled: false, sort_order: 550}
+
+# ---- Oceania ----
+- {iso2: "AU", iso3: "AUS", name: "Australia",   slug: "au", region: "oceania", default_language: "en", flag: "🇦🇺", is_enabled: true,  sort_order: 560}
+- {iso2: "NZ", iso3: "NZL", name: "New Zealand", slug: "nz", region: "oceania", default_language: "en", flag: "🇳🇿", is_enabled: false, sort_order: 570}

@@ -1,0 +1,32 @@
+country: CA
+aliases:
+  - {alias: "canada",   type: name,    weight: 1.0}
+  - {alias: "canadian", type: demonym, weight: 0.8}
+  - {alias: "canadians", type: demonym, weight: 0.8}
+  - {alias: "ottawa",   type: capital, weight: 0.9}
+  - {alias: "toronto",  type: city,    weight: 0.9}
+  - {alias: "montreal", type: city,    weight: 0.9}
+  - {alias: "vancouver", type: city,   weight: 0.9}
+  - {alias: "calgary",  type: city,    weight: 0.9}
+  - {alias: "edmonton", type: city,    weight: 0.9}
+  - {alias: "quebec",   type: region,  weight: 0.9}
+  - {alias: "ontario",  type: region,  weight: 0.9}
+  - {alias: "alberta",  type: region,  weight: 0.9}
+  - {alias: "british columbia", type: region, weight: 0.9}
+  - {alias: "manitoba", type: region,  weight: 0.9}
+  - {alias: "saskatchewan", type: region, weight: 0.9}
+  - {alias: "nova scotia", type: region, weight: 0.9}
+  - {alias: "house of commons of canada", type: institution, weight: 1.0}
+  - {alias: "bank of canada", type: institution, weight: 0.9}
+  - {alias: "rcmp",     type: institution, weight: 0.9}
+  - {alias: "canadian dollar", type: currency, weight: 0.4}
+  - {alias: "loonie",   type: currency, weight: 0.4}
+  # Victoria BC vs Victoria (Australian state) vs Victoria (Seychelles capital).
+  - {alias: "victoria", type: city, weight: 0.2, ambiguous: true,
+     context: ["british columbia","canada","canadian","vancouver island"]}
+  # London, Ontario — deliberately very weak; the UK London dominates.
+  - {alias: "london", type: city, weight: 0.2, ambiguous: true,
+     context: ["ontario","canada","canadian"]}
+  # Sydney, Nova Scotia vs Sydney, Australia.
+  - {alias: "sydney", type: city, weight: 0.2, ambiguous: true,
+     context: ["nova scotia","cape breton","canada"]}

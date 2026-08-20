@@ -1,0 +1,20 @@
+country: FR
+aliases:
+  - {alias: "france",    type: name,    weight: 1.0}
+  - {alias: "french",    type: demonym, weight: 0.8}
+  - {alias: "paris",     type: capital, weight: 0.9}
+  - {alias: "marseille", type: city,    weight: 0.9}
+  - {alias: "lyon",      type: city,    weight: 0.9}
+  - {alias: "toulouse",  type: city,    weight: 0.6}
+  - {alias: "bordeaux",  type: city,    weight: 0.6}
+  - {alias: "normandy",  type: region,  weight: 0.9}
+  - {alias: "brittany",  type: region,  weight: 0.9}
+  - {alias: "corsica",   type: region,  weight: 0.9}
+  - {alias: "elysee",    type: institution, weight: 1.0}
+  - {alias: "national assembly", type: institution, weight: 0.4}
+  - {alias: "banque de france", type: institution, weight: 0.9}
+  - {alias: "cac 40",    type: institution, weight: 0.9}
+  # "Nice" the city vs "nice" the adjective — the single most false-positive-prone
+  # alias in the whole gazetteer. Very low weight, hard gate.
+  - {alias: "nice", type: city, weight: 0.2, ambiguous: true,
+     context: ["france","french","cote d'azur","riviera","alpes-maritimes"]}

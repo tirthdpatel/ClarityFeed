@@ -1,0 +1,152 @@
+# ClarityFeed ingestion — ARCHITECTURE_V2 §A3, §1 risk 11.
+#
+# This replaces the /internal/collect webhook. That endpoint needed a shared
+# secret, a public URL and a caller; this needs a cron line. Once a run here
+# has succeeded, delete the endpoint and INTERNAL_SECRET with it — the whole
+# shared-secret surface disappears rather than being secured.
+#
+# DATABASE_URL must be the Supabase *session pooler* host. The direct
+# db.<ref>.supabase.co host is IPv6-only and GitHub runners are IPv4-only,
+# so the direct URL does not fail loudly here — it hangs until the step
+# times out.
+#
+# The steps deliberately call scripts in .github/scripts/ rather than
+# embedding shell in this file. CI logic that exists only as a YAML block
+# scalar is logic nobody can run locally on the day it breaks.
+
+name: ingest
+
+on:
+  schedule:
+    # :17, not :00. Scheduled workflows queue globally and the top of the
+    # hour is the worst-contended slot — runs there are routinely delayed
+    # by 10+ minutes or dropped outright. An odd minute gets picked up.
+    - cron: "17 * * * *"
+    # Weekly keep-alive. GitHub disables scheduled workflows in a public
+    # repo after 60 days with no repository activity, silently, and the
+    # first symptom is a site that stopped updating a fortnight ago.
+    - cron: "43 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Read feeds, write nothing"
+        type: boolean
+        default: false
+      limit:
+        description: "Max new articles (blank = no cap)"
+        type: string
+        default: ""
+      sources:
+        description: "Comma-separated name/feed substrings (blank = all)"
+        type: string
+        default: ""
+      skip_enrichment:
+        description: "Stop at the publish barrier"
+        type: boolean
+        default: false
+
+# Two runs must never overlap: they would race on the same url_hash inserts
+# and double-count a source's health. cancel-in-progress is deliberately
+# false — a run that has already passed the barrier should be allowed to
+# finish its enrichment rather than be killed by the next tick.
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+# Read by default; the keep-alive job below widens this for itself alone.
+permissions:
+  contents: read
+
+jobs:
+  # --------------------------------------------------------------------------
+  # Weekly keep-alive.
+  #
+  # GitHub disables a scheduled workflow in a public repo after 60 days with
+  # no *repository activity*. Workflow runs are not activity — a run that
+  # fires and skips every job keeps nothing alive, which is what the earlier
+  # version of this file did. It needs a commit.
+  #
+  # An empty commit is enough and touches no file, so it can never conflict
+  # with real work or dirty a diff. If the last commit is already one of
+  # ours and recent, we skip: 60 days of headroom does not need 52 markers.
+  # --------------------------------------------------------------------------
+  keepalive:
+    if: github.event.schedule == '43 6 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Push a keep-alive commit
+        run: |
+          set -euo pipefail
+          last=$(git log -1 --format=%ct)
+          age_days=$(( ( $(date +%s) - last ) / 86400 ))
+          echo "Last commit was ${age_days} day(s) ago."
+          if [ "${age_days}" -lt 30 ]; then
+            echo "Recent enough — the schedule is in no danger. Nothing to do."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit --allow-empty -m "chore: keep scheduled ingestion enabled"
+          git push
+
+  ingest:
+    if: github.event.schedule != '43 6 * * 1'
+    runs-on: ubuntu-latest
+    # Generous, but bounded: an hourly job that runs longer than an hour
+    # queues behind itself forever.
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      # ~90 MB of MiniLM weights. Without this every run re-retrieves them
+      # from HuggingFace, which is slow and puts a third-party service in
+      # the hot path of a job that is otherwise self-contained.
+      - name: Cache embedding model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: minilm-${{ hashFiles('requirements-ingest.txt') }}
+          restore-keys: minilm-
+
+      - name: Install dependencies
+        run: .github/scripts/ci-install.sh
+
+      - name: Run ingestion
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          APP_ENV: production
+          PYTHONUNBUFFERED: "1"
+          TRIGGER: ${{ github.event_name == 'workflow_dispatch' && 'manual' || 'cron' }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          SKIP_ENRICHMENT: ${{ inputs.skip_enrichment }}
+          LIMIT: ${{ inputs.limit }}
+          SOURCES: ${{ inputs.sources }}
+        run: .github/scripts/ci-ingest.sh
+
+      - name: Summarise
+        if: always()
+        run: .github/scripts/ci-summary.sh
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-report-${{ github.run_id }}
+          path: run-report.json
+          retention-days: 14
+          if-no-files-found: ignore

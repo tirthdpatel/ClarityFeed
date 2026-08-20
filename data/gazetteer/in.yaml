@@ -1,0 +1,46 @@
+country: IN
+aliases:
+  - {alias: "india",           type: name,        weight: 1.0}
+  - {alias: "republic of india", type: name,      weight: 1.0}
+  - {alias: "bharat",          type: name,        weight: 0.9}
+  - {alias: "indian",          type: demonym,     weight: 0.8}
+  - {alias: "indians",         type: demonym,     weight: 0.8}
+  - {alias: "new delhi",       type: capital,     weight: 0.9}
+  - {alias: "delhi",           type: capital,     weight: 0.9}
+  - {alias: "mumbai",          type: city,        weight: 0.9}
+  - {alias: "bengaluru",       type: city,        weight: 0.9}
+  - {alias: "bangalore",       type: city,        weight: 0.9}
+  - {alias: "kolkata",         type: city,        weight: 0.9}
+  - {alias: "chennai",         type: city,        weight: 0.9}
+  - {alias: "ahmedabad",       type: city,        weight: 0.6}
+  - {alias: "pune",            type: city,        weight: 0.6}
+  - {alias: "jaipur",          type: city,        weight: 0.6}
+  - {alias: "lucknow",         type: city,        weight: 0.6}
+  - {alias: "kerala",          type: region,      weight: 0.9}
+  - {alias: "maharashtra",     type: region,      weight: 0.9}
+  - {alias: "tamil nadu",      type: region,      weight: 0.9}
+  - {alias: "uttar pradesh",   type: region,      weight: 0.9}
+  - {alias: "west bengal",     type: region,      weight: 0.9}
+  - {alias: "gujarat",         type: region,      weight: 0.9}
+  - {alias: "karnataka",       type: region,      weight: 0.9}
+  - {alias: "rupee",           type: currency,    weight: 0.4}
+  - {alias: "lok sabha",       type: institution, weight: 0.9}
+  - {alias: "rajya sabha",     type: institution, weight: 0.9}
+  - {alias: "modi",            type: leader,      weight: 0.4}
+  - {alias: "reserve bank of india", type: institution, weight: 0.9}
+  - {alias: "sensex",          type: institution, weight: 0.9}
+  - {alias: "indian national congress", type: institution, weight: 1.0}
+  - {alias: "bharatiya janata party",   type: institution, weight: 1.0}
+  - {alias: "bjp",             type: institution, weight: 0.9}
+  # The party, not the US legislature.
+  - {alias: "congress", type: institution, weight: 0.2, ambiguous: true,
+     context: ["india","indian","rahul gandhi","bjp","lok sabha","opposition party","upa"]}
+  - {alias: "nifty",           type: institution, weight: 0.6}
+  # Ambiguous: also a major city in Pakistan's Sindh province.
+  - {alias: "hyderabad", type: city, weight: 0.6, ambiguous: true,
+     context: ["india","indian","telangana","andhra","modi","rupee"]}
+  # Ambiguous: Punjab and Kashmir straddle the India/Pakistan border.
+  - {alias: "punjab", type: region, weight: 0.4, ambiguous: true,
+     context: ["india","indian","chandigarh","amritsar","modi"]}
+  - {alias: "kashmir", type: region, weight: 0.4, ambiguous: true,
+     context: ["india","indian","srinagar","jammu","new delhi"]}
