@@ -1,0 +1,108 @@
+# Local development stack: `docker compose up --build`.
+#
+# This does NOT replace the Render deployment. It is the inner loop for the
+# containerised path, and it runs the same images Kubernetes runs, with the same
+# environment variables, so the only thing that changes between here and the
+# cluster is the orchestrator.
+#
+# Postgres is local here rather than Neon so the stack works offline. Note
+# DB_SSLMODE=disable: Neon requires TLS, a container on a private network does
+# not offer it, and the connection fails rather than downgrading.
+#
+# The password is never written into DATABASE_URL. libpq — which psycopg2 wraps
+# — reads PGPASSWORD from the environment when the connection string carries no
+# password, so the URL stays credential-free and the secret arrives separately.
+# Override either with a .env file; the defaults here are local-only.
+
+name: clarityfeed
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: clarity
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clarity}
+      POSTGRES_DB: clarity
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clarity -d clarity"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    image: clarity-api:latest
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://clarity@postgres:5432/clarity}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-clarity}
+      DB_SSLMODE: disable
+      APP_ENV: development
+      LOG_LEVEL: INFO
+      FRONTEND_URL: http://localhost:3000,http://localhost:8080
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-local_dev_secret_not_for_production}
+      LLM_PROVIDER: ${LLM_PROVIDER:-groq}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      HF_API_TOKEN: ${HF_API_TOKEN:-}
+    depends_on:
+      postgres: { condition: service_healthy }
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Ingestion above the publish barrier. Runs once and exits — `docker compose
+  # run --rm collector` to trigger a cycle by hand. In Kubernetes this is a
+  # CronJob, which is the same thing on a schedule.
+  collector:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.collector
+    image: clarity-collector:latest
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://clarity@postgres:5432/clarity}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-clarity}
+      DB_SSLMODE: disable
+      APP_ENV: development
+      LOG_LEVEL: INFO
+      USE_LOCAL_EMBEDDING_FALLBACK: "true"
+      HF_API_TOKEN: ${HF_API_TOKEN:-}
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
+  # Below the barrier. Scale it to watch the backlog drain faster:
+  #   docker compose up -d --scale worker=4
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    image: clarity-worker:latest
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://clarity@postgres:5432/clarity}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-clarity}
+      DB_SSLMODE: disable
+      APP_ENV: development
+      LOG_LEVEL: INFO
+      ENRICH_BATCH_SIZE: "5"
+      ENRICH_POLL_SECONDS: "10"
+      LLM_PROVIDER: ${LLM_PROVIDER:-groq}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    depends_on:
+      postgres: { condition: service_healthy }
+    deploy:
+      replicas: 2
+
+volumes:
+  pgdata:

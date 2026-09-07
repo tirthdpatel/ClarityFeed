@@ -1,0 +1,35 @@
+# ClarityFeed enrichment worker — the below-the-barrier stage.
+#
+#   docker build -f docker/Dockerfile.worker -t clarity-worker:latest .
+#
+# Same dependency set as the API and for the same reason: enrichment calls an
+# LLM over HTTP and needs no local model. Embedding, which does need torch,
+# happens above the barrier in the collector image.
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential libxml2-dev libxslt1-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt \
+    && apt-get purge -y build-essential && apt-get autoremove -y
+
+COPY backend/ backend/
+COPY config/ config/
+COPY scripts/ scripts/
+
+RUN useradd --create-home --uid 10001 clarity && chown -R clarity:clarity /app
+USER clarity
+
+EXPOSE 8082
+
+# PID 1 so the worker's SIGTERM handler runs and it can finish the batch it
+# holds a row lock on before the pod goes away.
+CMD ["python", "scripts/enrich_worker.py"]

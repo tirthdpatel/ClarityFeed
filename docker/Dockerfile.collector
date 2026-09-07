@@ -1,0 +1,44 @@
+# ClarityFeed ingestion — everything ABOVE the publish barrier.
+#
+#   docker build -f docker/Dockerfile.collector -t clarity-collector:latest .
+#
+# This is the heavy image, and the only one that installs
+# requirements-ingest.txt: local MiniLM embeddings pull in torch. The CPU wheel
+# index is not optional — the default torch wheel bundles CUDA and is roughly
+# five times the size, on a node with no GPU. requirements-ingest.txt says so
+# too; this Dockerfile is where that instruction is actually executed.
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    # Model weights land here. On Kubernetes this path is an emptyDir, so the
+    # ~90 MB download happens once per pod rather than once per run.
+    HF_HOME=/app/.cache/huggingface
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential libxml2-dev libxslt1-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt requirements-ingest.txt ./
+RUN pip install --no-cache-dir -r requirements-ingest.txt \
+        --extra-index-url https://download.pytorch.org/whl/cpu \
+    && apt-get purge -y build-essential && apt-get autoremove -y
+
+COPY backend/ backend/
+COPY config/ config/
+COPY scripts/ scripts/
+COPY alembic/ alembic/
+COPY alembic.ini .
+
+RUN useradd --create-home --uid 10001 clarity \
+    && mkdir -p /app/.cache/huggingface \
+    && chown -R clarity:clarity /app
+USER clarity
+
+# --skip-enrichment: in this deployment the workers own everything below the
+# barrier. The collector's job ends when articles reach PUBLISHED, which is
+# exactly what leaves them PENDING for the workers to claim.
+CMD ["python", "scripts/ingest.py", "--skip-enrichment"]

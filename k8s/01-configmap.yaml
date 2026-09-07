@@ -1,0 +1,42 @@
+# Non-secret configuration. Everything here maps to a field in
+# config/settings.py — pydantic-settings reads it straight from the environment,
+# so no code changes to consume any of it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clarity-config
+  namespace: clarity
+data:
+  APP_ENV: "production"
+  LOG_LEVEL: "INFO"
+
+  # Postgres runs inside the cluster and serves no TLS. The default in
+  # config/settings.py is "require", which is correct for Neon and fatal here —
+  # libpq refuses the connection rather than downgrading. Traffic never leaves
+  # the cluster network. Point DATABASE_URL at Neon instead and this becomes
+  # "require" again.
+  DB_SSLMODE: "disable"
+  DB_POOL_RECYCLE: "300"
+
+  # Enrichment workers. Batch size is how many rows one worker holds a lock on
+  # at a time; small on purpose, because a worker killed mid-batch releases the
+  # whole batch back to PENDING.
+  ENRICH_BATCH_SIZE: "5"
+  ENRICH_POLL_SECONDS: "10"
+  WORKER_PROBE_PORT: "8082"
+
+  # LLM. The provider abstraction in backend/llm/ means switching these is a
+  # config change, not a code change — which is the whole reason it exists,
+  # after Groq deprecated models twice.
+  LLM_PROVIDER: "groq"
+  LLM_DAILY_CALL_BUDGET: "200"
+
+  # Ingestion
+  RSS_FETCH_INTERVAL_MINUTES: "15"
+  MAX_CONCURRENT_FETCHES: "5"
+  USE_LOCAL_EMBEDDING_FALLBACK: "true"
+
+  # Must be explicit origins, never "*". config/settings.py refuses to start in
+  # production with a wildcard, because a wildcard plus credentials is both
+  # insecure and rejected outright by browsers.
+  FRONTEND_URL: "http://clarity.local,http://localhost:3000"

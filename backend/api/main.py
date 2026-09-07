@@ -4,16 +4,17 @@ ClarityFeed — FastAPI application entry point.
 This is the main application module deployed to Render. It:
  - Includes the internal trigger router (``/internal/collect``)
  - Seeds default RSS sources on first startup
- - Provides ``GET /health`` and ``GET /sources`` endpoints
+ - Provides ``GET /health``, ``GET /ready`` and ``GET /sources`` endpoints
  - Configures CORS for the Vercel frontend
 """
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
@@ -112,11 +113,52 @@ app.include_router(internal_router)
 
 @app.get("/health")
 def health_check() -> dict:
-    """Basic health check endpoint."""
+    """Liveness. Is this process alive?
+
+    Deliberately touches nothing external. Kubernetes uses this as its
+    livenessProbe, and a liveness probe that checked Postgres would respond to
+    a database outage by restarting every API pod — turning one broken
+    dependency into a cluster-wide crash loop while fixing nothing. Restarting
+    a pod cannot repair someone else's database.
+
+    ``instance`` is the pod name, injected by the downward API. It is how you
+    can see the Service load balancing across replicas from the browser.
+    """
     return {
         "status": "ok",
         "version": "0.1.0",
         "platform": "render-free-tier",
+        "instance": os.getenv("POD_NAME", "local"),
+    }
+
+
+@app.get("/ready")
+def readiness_check(db: Session = Depends(get_db)) -> dict:
+    """Readiness. Can this pod serve traffic right now?
+
+    This one *does* check the database, which is the difference between it and
+    /health. Failing removes the pod from the Service's endpoints without
+    restarting it, so requests go to healthy replicas and this pod rejoins by
+    itself once Neon resumes or Postgres comes back.
+
+    Returns 503 rather than raising, so the probe sees a definite negative
+    instead of a connection reset.
+    """
+    from sqlalchemy import text
+
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as exc:  # noqa: BLE001 - the probe must not itself crash
+        logger.warning("readiness: database check failed: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail={"status": "not ready", "database": False},
+        ) from exc
+
+    return {
+        "status": "ready",
+        "database": True,
+        "instance": os.getenv("POD_NAME", "local"),
     }
 
 

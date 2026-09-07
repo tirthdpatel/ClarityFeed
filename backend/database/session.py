@@ -34,7 +34,12 @@ def _build_connect_args() -> dict:
     if settings.DATABASE_URL.startswith("sqlite"):
         return {}
     return {
-        "sslmode": "require",
+        # Was hardcoded to "require". That is right for Neon and wrong for a
+        # Postgres inside a Kubernetes cluster, which serves no TLS by default
+        # and rejects the connection rather than downgrading. See DB_SSLMODE
+        # in config/settings.py — the default is still "require", so hosted
+        # deployments are unaffected.
+        "sslmode": settings.DB_SSLMODE,
         "connect_timeout": settings.DB_CONNECT_TIMEOUT,
     }
 

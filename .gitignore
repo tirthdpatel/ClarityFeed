@@ -71,3 +71,7 @@ _to_delete/
 *.sqlite3
 *.db
 !alembic/**/*.py
+
+# Container / Kubernetes local state
+.env
+*.env.local

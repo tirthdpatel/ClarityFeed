@@ -1,0 +1,87 @@
+# The enrichment workers — the reason this project is on Kubernetes.
+#
+# Each worker claims articles with SELECT ... FOR UPDATE SKIP LOCKED, so two
+# workers never see the same row and never contend. Replicas are therefore
+# purely additive:
+#
+#   kubectl -n clarity scale deployment/clarity-worker --replicas=8
+#
+# and the PENDING backlog drains roughly four times faster, with no
+# reconfiguration and no code change. See backend/enrichment/worker.py for why
+# the claim is Postgres rather than Redis.
+#
+# THE CEILING IS THE LLM BUDGET, NOT THE POD COUNT. config/settings.py caps
+# LLM_DAILY_CALL_BUDGET at 200 calls/day against a 1,000/day provider limit.
+# Sixteen workers do not summarise more per day than four — they only clear a
+# burst faster. Scaling past that buys nothing, and saying so is the difference
+# between understanding the architecture and reciting it.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clarity-worker
+  namespace: clarity
+  labels: { app: clarity-worker }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: clarity-worker }
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 2
+  template:
+    metadata:
+      labels: { app: clarity-worker }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      # The worker traps SIGTERM and finishes the batch it holds a lock on.
+      # A hard kill is survivable — the claim dies with the transaction and the
+      # rows return to PENDING — but draining cleanly avoids re-spending LLM
+      # calls already deducted from the daily budget.
+      terminationGracePeriodSeconds: 45
+      containers:
+        - name: worker
+          image: clarity-worker:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8082
+              name: probe
+          envFrom:
+            - configMapRef: { name: clarity-config }
+            - secretRef: { name: clarity-secrets }
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef: { fieldPath: metadata.name }
+          # Liveness only. A worker idling because the LLM provider is down is
+          # healthy — it is doing exactly what the publish barrier designed it
+          # to do — and restarting it would not help.
+          livenessProbe:
+            httpGet: { path: /health, port: probe }
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /health, port: probe }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            # The request is what the scheduler packs against, so it reflects
+            # real steady-state usage. Workers are I/O-bound waiting on the LLM,
+            # not CPU-bound — which is also why a CPU-based HPA would be the
+            # wrong autoscaler here. See docs/kubernetes.md.
+            requests: { cpu: 100m, memory: 192Mi }
+            limits: { cpu: "1", memory: 512Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

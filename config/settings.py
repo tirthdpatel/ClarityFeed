@@ -23,6 +23,31 @@ class Settings(BaseSettings):
     DB_POOL_RECYCLE: int = 300
     DB_CONNECT_TIMEOUT: int = 10
 
+    # SSL mode for the PostgreSQL connection.
+    #
+    # "require" is correct for Neon and every other hosted Postgres, and stays
+    # the default so nothing about the Render deployment changes. It is wrong
+    # for a Postgres running inside a Kubernetes cluster, which does not enable
+    # TLS out of the box — there, connections fail outright rather than falling
+    # back, so this has to be settable rather than inferred. The k8s ConfigMap
+    # sets DB_SSLMODE=disable; traffic there never leaves the cluster network.
+    DB_SSLMODE: str = "require"
+
+    # ---- Enrichment worker (Kubernetes deployment only) ----
+    #
+    # These configure the below-the-barrier worker in backend/enrichment/.
+    # The GitHub Actions ingest path does not read them.
+    #
+    # Rows are claimed with SELECT ... FOR UPDATE SKIP LOCKED, so the batch size
+    # is how many articles one worker holds a lock on at a time. Small on
+    # purpose: a large batch means a long transaction, and a worker killed
+    # mid-batch releases the whole batch back to PENDING.
+    ENRICH_BATCH_SIZE: int = 5
+    #: Seconds to wait before re-polling when no PENDING rows were found.
+    ENRICH_POLL_SECONDS: float = 10.0
+    #: Port the worker serves its Kubernetes health probe on.
+    WORKER_PROBE_PORT: int = 8082
+
     # ---- RSS Collection ----
     RSS_FETCH_INTERVAL_MINUTES: int = 15
     MAX_CONCURRENT_FETCHES: int = 5

@@ -1,0 +1,14 @@
+.venv/
+.git/
+__pycache__/
+*.pyc
+.pytest_cache/
+_backup_pre_phase0/
+data/
+docs/
+tests/
+k8s/
+frontend/
+.env
+.DS_Store
+*.md

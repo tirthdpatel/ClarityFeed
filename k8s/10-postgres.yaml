@@ -1,0 +1,76 @@
+# Postgres as a StatefulSet.
+#
+# A StatefulSet rather than a Deployment because each pod needs a stable
+# identity and its own PersistentVolumeClaim; a Deployment's pods are
+# interchangeable, which a database's storage is not.
+#
+# One replica. Real HA Postgres is an operator's job (CloudNativePG, Zalando),
+# not a hand-written manifest's, and this project's production database is Neon
+# anyway — this exists so the cluster can run self-contained.
+apiVersion: v1
+kind: Service
+metadata:
+  name: clarity-postgres
+  namespace: clarity
+  labels: { app: clarity-postgres }
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  selector: { app: clarity-postgres }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: clarity-postgres
+  namespace: clarity
+spec:
+  serviceName: clarity-postgres
+  replicas: 1
+  selector:
+    matchLabels: { app: clarity-postgres }
+  template:
+    metadata:
+      labels: { app: clarity-postgres }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_USER
+              value: clarity
+            - name: POSTGRES_DB
+              value: clarity
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: clarity-secrets, key: POSTGRES_PASSWORD }
+            # A mounted volume already contains lost+found, and the postgres
+            # image refuses to initialise into a non-empty directory.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          # pg_isready rather than a TCP check: the port accepts connections
+          # well before the server will answer a query.
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "clarity", "-d", "clarity"] }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec: { command: ["pg_isready", "-U", "clarity", "-d", "clarity"] }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 1Gi }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests: { storage: 2Gi }

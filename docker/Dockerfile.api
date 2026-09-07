@@ -1,0 +1,43 @@
+# ClarityFeed read API.
+#
+#   docker build -f docker/Dockerfile.api -t clarity-api:latest .
+#
+# Build context is the repository root — the image needs backend/ and config/.
+#
+# This installs requirements.txt only, NOT requirements-ingest.txt. That split
+# already exists in this repo for a documented reason (torch is ~2 GB and the
+# API never embeds anything); honouring it here is the difference between a
+# ~200 MB image and a ~2.5 GB one.
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
+WORKDIR /app
+
+# psycopg2-binary ships wheels, but lxml and newspaper4k build against libxml2
+# on slim. Installed as a single layer and removed in the same one so the build
+# toolchain never reaches the final image.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential libxml2-dev libxslt1-dev curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Dependencies before source: editing application code reuses this layer.
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt \
+    && apt-get purge -y build-essential && apt-get autoremove -y
+
+COPY backend/ backend/
+COPY config/ config/
+COPY alembic/ alembic/
+COPY alembic.ini .
+
+RUN useradd --create-home --uid 10001 clarity && chown -R clarity:clarity /app
+USER clarity
+
+EXPOSE 8000
+
+# Not wrapped in a shell, so uvicorn is PID 1 and receives SIGTERM directly
+# for a graceful drain during a rolling update.
+CMD ["uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

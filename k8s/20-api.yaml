@@ -1,0 +1,107 @@
+# The read API — three replicas behind one Service.
+#
+# Stateless, so replicas are free. This is where most of the Kubernetes story
+# is visible at once: multiple replicas, self-healing, rolling updates, and the
+# liveness/readiness split.
+apiVersion: v1
+kind: Service
+metadata:
+  name: clarity-api
+  namespace: clarity
+  labels: { app: clarity-api }
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: http
+      name: http
+  selector: { app: clarity-api }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clarity-api
+  namespace: clarity
+  labels: { app: clarity-api }
+spec:
+  replicas: 3
+  selector:
+    matchLabels: { app: clarity-api }
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # Capacity never dips: add a new pod, wait for it to pass readiness, then
+      # retire an old one.
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels: { app: clarity-api }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: api
+          image: clarity-api:latest
+          # Images are side-loaded into minikube, never pulled from a registry.
+          # Change to Always once you push to one.
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef: { name: clarity-config }
+            - secretRef: { name: clarity-secrets }
+          env:
+            # Downward API: lets /health and /ready report which pod answered,
+            # so you can watch the Service load balance from the browser.
+            - name: POD_NAME
+              valueFrom:
+                fieldRef: { fieldPath: metadata.name }
+          # Liveness checks the process only — see backend/api/main.py for why
+          # it must not touch the database.
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+          # Readiness checks Postgres. Failing pulls the pod out of the Service
+          # without restarting it, and it rejoins on its own.
+          readinessProbe:
+            httpGet: { path: /ready, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          # Gives a slow first boot room — the lifespan handler runs
+          # init_db_with_retry(), which retries Neon cold starts for up to ~25s.
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 3
+            failureThreshold: 20
+          resources:
+            requests: { cpu: 100m, memory: 192Mi }
+            limits: { memory: 512Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        # readOnlyRootFilesystem is on, so scratch space is an emptyDir rather
+        # than a writable image layer.
+        - name: tmp
+          emptyDir: {}
+---
+# Stops a node drain from taking every API pod at once.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: clarity-api
+  namespace: clarity
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels: { app: clarity-api }

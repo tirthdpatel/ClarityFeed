@@ -1,0 +1,90 @@
+# Ingestion above the publish barrier, as a CronJob.
+#
+# WHY A CRONJOB AND NOT A DEPLOYMENT
+#
+# Ingestion is a scheduled batch, not a service. It reads every feed, writes
+# what is new, and exits — there is nothing to keep running between ticks, and
+# a Deployment would mean writing a sleep loop to reimplement cron badly.
+#
+# WHY concurrencyPolicy: Forbid
+#
+# This is the load-bearing line. Two ingestion runs overlapping would fetch
+# every feed twice and race on the same url_hash unique constraint. If a run
+# ever takes longer than the interval, the right behaviour is to skip the tick,
+# not to pile up. "Forbid" says exactly that.
+#
+# This replaces .github/workflows/ingest.yml in a cluster deployment — the same
+# scripts/ingest.py entry point, on a different scheduler. The Actions workflow
+# stays the production path; see docs/kubernetes.md.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: clarity-collector
+  namespace: clarity
+  labels: { app: clarity-collector }
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  # If the controller is down at the scheduled moment, a run more than 5 minutes
+  # late is not worth starting — the next tick is closer than the missed one.
+  startingDeadlineSeconds: 300
+  jobTemplate:
+    spec:
+      # Retry a failed run twice, then stop. scripts/ingest.py already exits 0
+      # for a dead feed (the circuit breaker absorbs it), so a non-zero exit
+      # here means something structural, and retrying it forever would not fix
+      # it.
+      backoffLimit: 2
+      # A run that has not finished in 20 minutes is wedged, not slow.
+      activeDeadlineSeconds: 1200
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+          containers:
+            - name: collector
+              image: clarity-collector:latest
+              imagePullPolicy: IfNotPresent
+              # `command`, not `args`: the image sets CMD and no ENTRYPOINT, so
+              # overriding args alone happens to work but reads as though it
+              # appends. Spelling out the whole command removes the ambiguity.
+              #
+              # --skip-enrichment: the workers own everything below the barrier
+              # in this deployment. Articles reach PUBLISHED and stay PENDING
+              # for enrichment, which is exactly what the workers claim.
+              command: ["python", "scripts/ingest.py", "--skip-enrichment"]
+              envFrom:
+                - configMapRef: { name: clarity-config }
+                - secretRef: { name: clarity-secrets }
+              env:
+                - name: POD_NAME
+                  valueFrom:
+                    fieldRef: { fieldPath: metadata.name }
+              resources:
+                # Memory is the real constraint: MiniLM weights are ~90 MB and
+                # torch's runtime footprint is several hundred more. This is the
+                # image that would OOM on Render's 512 MB free tier, which is
+                # why embedding is an HTTP call there and local here.
+                requests: { cpu: 250m, memory: 768Mi }
+                limits: { memory: 2Gi }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+                - name: hf-cache
+                  mountPath: /app/.cache/huggingface
+          volumes:
+            - name: tmp
+              emptyDir: {}
+            # Model weights download once per pod rather than once per import.
+            # A PVC here would make it once per cluster, at the cost of a
+            # ReadWriteMany volume most local clusters do not have.
+            - name: hf-cache
+              emptyDir: {}
