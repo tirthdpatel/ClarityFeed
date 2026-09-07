@@ -199,13 +199,87 @@ def _read(path: str, staged: bool) -> str | None:
         return None
 
 
+def _iter_history_additions() -> "list[tuple[str, int, str]]":
+    """Yield (path, index, line) for every line ever ADDED in this repo.
+
+    WHY THIS LIVES HERE AND NOT IN THE WORKFLOW
+
+    The history check used to be a `git log -p | grep -E` pipeline inlined in
+    .github/workflows/secrets.yml. It duplicated the patterns above in a second
+    dialect (POSIX ERE), and — the reason it failed — it had no notion of
+    ALLOWLIST_PATHS, so it fired on this scanner's own test fixtures. A checker
+    that cries wolf is a checker someone eventually deletes, which is the first
+    principle stated at the top of this file.
+
+    Routing history through the same rules and the same allowlist keeps one
+    source of truth and makes the check runnable locally, which is the standard
+    .github/workflows/ingest.yml already sets for CI logic.
+
+    Only added lines are examined. A line a commit *removed* was, by
+    definition, present in some earlier commit and is caught there.
+    """
+    out = subprocess.run(
+        ["git", "log", "-p", "--all", "--no-color", "--format=%H"],
+        capture_output=True, text=True, check=True,
+    ).stdout
+
+    results: list[tuple[str, int, str]] = []
+    path = "<unknown>"
+    for index, line in enumerate(out.splitlines(), 1):
+        if line.startswith("+++ "):
+            target = line[4:].strip()
+            # "+++ b/some/path", or /dev/null for a deletion.
+            path = target[2:] if target.startswith(("a/", "b/")) else target
+            continue
+        # "+++" is handled above; a real addition is "+" followed by content.
+        if line.startswith("+") and not line.startswith("+++"):
+            results.append((path, index, line[1:]))
+    return results
+
+
+def _scan_history() -> int:
+    findings = 0
+    for path, index, line in _iter_history_additions():
+        if path == "/dev/null" or _should_skip(path):
+            continue
+        if _is_allowlisted(line, path):
+            continue
+        for rule in RULES:
+            if rule.pattern.search(line):
+                if findings == 0:
+                    print("\n\033[1;31mSECRET FOUND IN GIT HISTORY\033[0m\n")
+                findings += 1
+                shown = line if len(line) <= 100 else line[:97] + "..."
+                print(f"  \033[1m{path}\033[0m  [{rule.name}]  (history line {index})")
+                print(f"    {shown.strip()}")
+                print(f"    -> {rule.hint}\n")
+                break
+
+    if findings:
+        print(f"\033[1;31m{findings} finding(s) in history.\033[0m\n")
+        print("Removing the commit is NOT sufficient — anything that ever reached")
+        print("a remote must be treated as compromised. Rotate the credential,")
+        print("then rewrite history with git-filter-repo if you must.\n")
+        return 1
+
+    print("check_secrets: history clean")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Scan for committed secrets.")
     parser.add_argument(
         "--staged", action="store_true",
         help="Scan only staged content (pre-commit hook mode).",
     )
+    parser.add_argument(
+        "--history", action="store_true",
+        help="Scan every line ever added in git history, not just the current tree.",
+    )
     args = parser.parse_args()
+
+    if args.history:
+        return _scan_history()
 
     files = _staged_files() if args.staged else _tracked_files()
     files = [f for f in files if not _should_skip(f)]

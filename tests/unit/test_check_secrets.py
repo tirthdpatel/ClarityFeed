@@ -110,3 +110,85 @@ def test_env_example_is_allowlisted() -> None:
 def test_noqa_marker_suppresses() -> None:
     line = 'url = "postgres://u:realpassword99@host:5432/db"  # noqa: secret'
     assert not scan_text(line, "config/settings.py")
+
+
+# ---------------------------------------------------------------------------
+# History scanning (--history)
+# ---------------------------------------------------------------------------
+#
+# The history check used to be a `git log -p | grep -E` pipeline inlined in
+# .github/workflows/secrets.yml. It reimplemented the patterns in a second
+# dialect and knew nothing about ALLOWLIST_PATHS, so it fired on the fixtures
+# above and every CI run from 2026-08-20 onward was red for a false positive —
+# the exact corrosion this module's docstring warns about. These tests pin the
+# behaviour that replaced it.
+
+
+class TestHistoryDiffParsing:
+    """The parser has to attribute each added line to the right file, because
+    the allowlist is per-path. Getting this wrong silently disables it."""
+
+    def test_attributes_added_lines_to_their_file(self, monkeypatch) -> None:
+        import check_secrets
+
+        diff = (
+            "diff --git a/backend/thing.py b/backend/thing.py\n"
+            "--- a/backend/thing.py\n"
+            "+++ b/backend/thing.py\n"
+            "+KEY = 1\n"
+            "diff --git a/other.py b/other.py\n"
+            "--- a/other.py\n"
+            "+++ b/other.py\n"
+            "+KEY = 2\n"
+        )
+        monkeypatch.setattr(
+            check_secrets.subprocess,
+            "run",
+            lambda *a, **k: type("R", (), {"stdout": diff})(),
+        )
+        got = [(path, line) for path, _, line in check_secrets._iter_history_additions()]
+        assert got == [("backend/thing.py", "KEY = 1"), ("other.py", "KEY = 2")]
+
+    def test_the_plus_plus_plus_header_is_not_itself_content(self, monkeypatch) -> None:
+        """'+++ b/x' starts with '+' and must not be scanned as an added line."""
+        import check_secrets
+
+        monkeypatch.setattr(
+            check_secrets.subprocess,
+            "run",
+            lambda *a, **k: type("R", (), {"stdout": "+++ b/x.py\n+real = 1\n"})(),
+        )
+        lines = [line for _, _, line in check_secrets._iter_history_additions()]
+        assert lines == ["real = 1"]
+
+    def test_removed_lines_are_ignored(self, monkeypatch) -> None:
+        """A line some commit deleted was added by an earlier commit, and is
+        caught there. Scanning deletions would double-report every finding."""
+        import check_secrets
+
+        monkeypatch.setattr(
+            check_secrets.subprocess,
+            "run",
+            lambda *a, **k: type("R", (), {"stdout": "+++ b/x.py\n-gone = 1\n+kept = 2\n"})(),
+        )
+        lines = [line for _, _, line in check_secrets._iter_history_additions()]
+        assert lines == ["kept = 2"]
+
+
+class TestHistoryRespectsTheAllowlist:
+    """The whole reason the shell version failed."""
+
+    def test_fixture_file_is_allowlisted_in_history_too(self) -> None:
+        from check_secrets import _is_allowlisted
+
+        line = "GROQ_API_KEY=gsk_abcdefghij1234567890ABCDEFGHIJ"
+        assert _is_allowlisted(line, "tests/unit/test_check_secrets.py")
+        # The same line in application code must still fire.
+        assert not _is_allowlisted(line, "backend/llm/factory.py")
+
+    def test_this_repos_own_history_is_clean(self) -> None:
+        """Regression guard: if this fails, either a real secret was committed
+        or a new fixture needs an allowlist entry. Both need a human."""
+        from check_secrets import _scan_history
+
+        assert _scan_history() == 0
