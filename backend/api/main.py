@@ -162,6 +162,47 @@ def readiness_check(db: Session = Depends(get_db)) -> dict:
     }
 
 
+@app.get("/stats/pipeline")
+def pipeline_stats(db: Session = Depends(get_db)) -> dict:
+    """Where every article currently sits in the pipeline.
+
+    This is the endpoint the scaling demo watches: `pending_enrichment` is the
+    backlog the workers are draining, and it is the same number KEDA's
+    PostgreSQL scaler queries to decide how many workers to run
+    (k8s/40-keda-scaledobject.yaml).
+
+    Cheap enough to poll: two grouped counts over indexed columns.
+    """
+    from sqlalchemy import func, select
+
+    from backend.database.orm_models import RawArticle
+
+    def counts(column) -> dict[str, int]:
+        rows = db.execute(select(column, func.count(RawArticle.id)).group_by(column)).all()
+        return {str(value): int(count) for value, count in rows}
+
+    by_enrichment = counts(RawArticle.enrichment_status)
+    by_ingest = counts(RawArticle.ingest_status)
+
+    return {
+        "ingest": by_ingest,
+        "enrichment": by_enrichment,
+        # Named separately because it is the one number that drives autoscaling.
+        # PUBLISHED-only: an article that has not cleared the barrier is not
+        # work the enrichment workers can claim yet.
+        "pending_enrichment": int(
+            db.scalar(
+                select(func.count(RawArticle.id))
+                .where(RawArticle.enrichment_status == "PENDING")
+                .where(RawArticle.ingest_status == "PUBLISHED")
+            )
+            or 0
+        ),
+        "published": by_ingest.get("PUBLISHED", 0),
+        "instance": os.getenv("POD_NAME", "local"),
+    }
+
+
 @app.get("/sources")
 def list_sources(db: Session = Depends(get_db)) -> list[dict]:
     """Return all active RSS sources."""

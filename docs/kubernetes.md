@@ -108,6 +108,7 @@ workers, not the eight this will ever run. Redis or a real broker is the answer
 | `clarity-collector` | **CronJob** | — | A scheduled batch, not a service |
 | `clarity-worker` | Deployment | 2 → N | The scaling story |
 | `clarity` | Ingress | — | Single entry point |
+| `clarity-worker` | ScaledObject | — | KEDA, scales workers on queue depth |
 
 Plus a ConfigMap, a Secret, and a PodDisruptionBudget on the API.
 
@@ -172,19 +173,22 @@ happened.
 
 ### 3. Horizontal scaling — the one that justifies the architecture
 
-```bash
-# create a backlog
-kubectl -n clarity create job --from=cronjob/clarity-collector backfill
+First you need a backlog, and a real database may not have one — see
+*"Why the queue is usually empty"* below. Seed a synthetic one:
 
-# watch it drain with 2 workers, then with 8
+```bash
+kubectl -n clarity exec deploy/clarity-api -- \
+    python scripts/seed_demo_backlog.py --count 200
+```
+
+Then watch it drain, first with 2 workers and then with 8:
+
+```bash
+watch -n2 'curl -s http://clarity.local/stats/pipeline | jq .pending_enrichment'
 kubectl -n clarity scale deployment/clarity-worker --replicas=8
 ```
 
-Count the backlog directly:
-
-```sql
-SELECT enrichment_status, count(*) FROM raw_articles GROUP BY 1;
-```
+Clean up afterwards with `--clean`.
 
 **Be ready for the follow-up.** More workers drain a *burst* faster; they do not
 raise the daily ceiling. `LLM_DAILY_CALL_BUDGET` is 200 calls/day against a
@@ -211,6 +215,77 @@ the batch they hold a lock on, and exit within
 `terminationGracePeriodSeconds: 45`. A hard kill is survivable — the claim dies
 with the transaction — but draining avoids re-spending LLM calls already
 deducted from the budget.
+
+## Autoscaling on queue depth
+
+`k8s/40-keda-scaledobject.yaml` scales the workers on the backlog itself:
+
+```sql
+SELECT count(*) FROM raw_articles
+WHERE enrichment_status = 'PENDING' AND ingest_status = 'PUBLISHED'
+```
+
+**Why not a CPU HPA.** It is the default answer and it is wrong here. These
+workers spend nearly all their wall time blocked on an HTTP call to Groq, so
+CPU stays near idle while the backlog grows without bound — a CPU HPA would sit
+at one replica through exactly the burst it was installed to absorb.
+
+Kubernetes cannot scale on a SQL count natively; it is not a resource metric.
+KEDA supplies it as an external metric and drives an ordinary HPA underneath,
+which is why this is a `ScaledObject` and not an `HorizontalPodAutoscaler`.
+
+`targetQueryValue: 20` is articles *per worker*, not a total: a backlog of 80
+asks for 4 replicas. Scale-up is deliberately faster than scale-down (30s
+stabilisation up, 300s down) because ingestion delivers work in 15-minute
+bursts and scaling in mid-batch abandons a claim that must then be re-made.
+
+It does not scale to zero. A resting worker costs ~100m CPU, and cold-starting
+the pool would add a minute of latency to the first article after every quiet
+period.
+
+Requires KEDA in the cluster:
+
+```bash
+helm repo add kedacore https://kedacore.github.io/charts
+helm install keda kedacore/keda --namespace keda --create-namespace
+```
+
+Without it the manifest applies as an unrecognised resource and does nothing;
+the workers stay at their Deployment replica count and `kubectl scale` still
+works by hand.
+
+**The ceiling is still the quota.** `LLM_DAILY_CALL_BUDGET` is 200 calls/day
+against a provider limit of 1,000. Eight workers clear a burst faster than two;
+they do not summarise more per day. `maxReplicaCount: 8` reflects that — scaling
+past it buys nothing.
+
+## Why the queue is usually empty
+
+Worth knowing before you demo, because it looks like a bug and is not.
+
+On 2026-09-07 the live database held **9,069 articles, every one of them
+`enrichment_status = SKIPPED`, with zero PENDING**, and `cleaned_articles` was
+empty. The chain is:
+
+```
+no rows in source_permissions
+    -> Permissions.restrictive() for every source
+    -> can_store_full_text = False
+    -> no body is ever fetched
+    -> nothing is cleaned
+    -> nothing is summarisable
+    -> every article is SKIPPED
+```
+
+That is `backend/permissions.py` working exactly as designed: an unreviewed
+publisher does not get its full text stored. The enrichment stage is dormant
+until a source is reviewed and granted `can_store_full_text`, which is a
+licensing decision made per source, by a person.
+
+This is why `scripts/seed_demo_backlog.py` creates its own fixture source with
+synthetic lorem-ipsum bodies rather than granting real publishers full-text
+permission. Real load, no real content, and the compliance posture is untouched.
+The script refuses to run when `APP_ENV=production`.
 
 ## Images
 
@@ -286,12 +361,10 @@ Nothing else in the application changed to run on Kubernetes.
 
 Being able to say what you left out, and why, is worth as much as what you built.
 
-- **HorizontalPodAutoscaler.** The manual `kubectl scale` demo already proves
-  replicas are additive. A CPU-based HPA would be the *wrong* signal: workers
-  are I/O-bound waiting on the LLM, so CPU stays flat while the backlog grows.
-  The correct trigger is `COUNT(*) WHERE enrichment_status = 'PENDING'`, which
-  needs KEDA or a custom metrics adapter. That is the next change, and it is
-  worth more than a CPU HPA that would never fire.
+- **Prometheus and Grafana.** The worker's `/metrics` returns JSON, not
+  exposition format. Nothing currently needs it — KEDA's PostgreSQL scaler
+  queries the database directly rather than going through a metrics pipeline —
+  so this is for dashboards, not autoscaling.
 - **Redis.** Covered above. Not needed until one Postgres cannot serve the claim
   query.
 - **Postgres HA.** One replica with a PVC. Real HA is an operator's job, and

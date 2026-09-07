@@ -1,0 +1,94 @@
+# Queue-depth autoscaling for the enrichment workers.
+#
+# WHY NOT A PLAIN CPU HPA
+#
+# A HorizontalPodAutoscaler on CPU is the default answer and it is the wrong
+# one here. These workers spend nearly all their wall time blocked on an HTTP
+# call to Groq, so CPU stays near idle while the PENDING backlog grows without
+# bound. A CPU HPA would sit at one replica through exactly the burst it was
+# installed to absorb.
+#
+# The signal that actually correlates with "we need more workers" is the depth
+# of the queue itself:
+#
+#   SELECT count(*) FROM raw_articles
+#   WHERE enrichment_status = 'PENDING' AND ingest_status = 'PUBLISHED'
+#
+# Kubernetes cannot scale on that natively — it is not a resource metric. KEDA
+# supplies it as an external metric and drives a standard HPA underneath, which
+# is why this is a ScaledObject rather than an HPA manifest.
+#
+# REQUIRES KEDA:
+#   helm repo add kedacore https://kedacore.github.io/charts
+#   helm install keda kedacore/keda --namespace keda --create-namespace
+#
+# Without KEDA installed this manifest applies as an unrecognised resource and
+# does nothing; the workers stay at their Deployment replica count and
+# `kubectl scale` still works by hand.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: clarity-worker
+  namespace: clarity
+  labels:
+    app: clarity-worker
+spec:
+  scaleTargetRef:
+    name: clarity-worker
+
+  # KEDA takes ownership of the replica count. The Deployment's own `replicas`
+  # becomes the value used only before this object is reconciled.
+  minReplicaCount: 1
+  maxReplicaCount: 8
+
+  # How often to run the query. Every 30s is frequent enough for a backlog that
+  # arrives in 15-minute ingestion ticks, and gentle on the database.
+  pollingInterval: 30
+
+  # Wait 5 minutes of sustained low backlog before scaling in. Enrichment
+  # batches take tens of seconds, and scaling down mid-batch would abandon a
+  # claim that then has to be re-made. Slow to shrink, quick to grow.
+  cooldownPeriod: 300
+
+  # Never scale to zero. A worker at rest costs ~100m CPU, and cold-starting the
+  # pool would add a minute of latency to the first article after every quiet
+  # period. Scale-to-zero is worth it for spiky expensive workloads, not this.
+  idleReplicaCount: null
+
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          # Absorb a burst quickly: ingestion ticks deliver a batch all at once.
+          stabilizationWindowSeconds: 30
+          policies:
+            - type: Pods
+              value: 4
+              periodSeconds: 60
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 120
+
+  triggers:
+    - type: postgresql
+      metadata:
+        # Discrete connection parameters rather than a connection string, so the
+        # password stays in its own Secret key. See docs/kubernetes.md.
+        host: clarity-postgres
+        port: "5432"
+        userName: clarity
+        dbName: clarity
+        sslmode: disable
+        passwordFromEnv: PGPASSWORD
+
+        # targetQueryValue is articles-per-worker, not a total. KEDA divides the
+        # query result by it: a backlog of 80 with a target of 20 asks for 4
+        # replicas, capped by maxReplicaCount above.
+        targetQueryValue: "20"
+        query: >-
+          SELECT count(*) FROM raw_articles
+          WHERE enrichment_status = 'PENDING'
+            AND ingest_status = 'PUBLISHED'

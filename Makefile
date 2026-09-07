@@ -1,7 +1,8 @@
 # ClarityFeed — container and cluster workflows.
 # The non-container paths (Render, GitHub Actions) are unchanged; see README.md.
 .PHONY: help test images k8s-secrets k8s-load k8s-up k8s-down k8s-status \
-        compose-up compose-down compose-collect demo-scale demo-heal demo-rollout
+        compose-up compose-down compose-collect demo-seed demo-unseed \
+        demo-scale demo-heal demo-rollout keda-install
 
 NS   := clarity
 TAG  ?= latest
@@ -62,6 +63,20 @@ k8s-status: ## Show what is running
 	kubectl -n $(NS) get pods,svc,cronjob,ingress
 
 # --- demos (see docs/kubernetes.md) -----------------------------------------
+keda-install: ## Install KEDA, required by k8s/40-keda-scaledobject.yaml
+	helm repo add kedacore https://kedacore.github.io/charts
+	helm repo update
+	helm install keda kedacore/keda --namespace keda --create-namespace
+
+demo-seed: ## Create a synthetic PENDING backlog for the scaling demo
+	kubectl -n $(NS) exec deploy/clarity-api -- \
+	  python scripts/seed_demo_backlog.py --count 200
+	@echo "watch: curl -s http://clarity.local/stats/pipeline | jq .pending_enrichment"
+
+demo-unseed: ## Remove the synthetic backlog and its fixture source
+	kubectl -n $(NS) exec deploy/clarity-api -- \
+	  python scripts/seed_demo_backlog.py --clean
+
 demo-scale: ## Scale workers 2 -> 8
 	kubectl -n $(NS) scale deployment/clarity-worker --replicas=8
 	kubectl -n $(NS) get pods -l app=clarity-worker -w
