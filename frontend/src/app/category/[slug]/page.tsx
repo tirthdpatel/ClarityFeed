@@ -11,9 +11,10 @@ async function categoryName(slug: string): Promise<string | null> {
 export async function generateMetadata({
   params,
 }: {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
-  const name = await categoryName(params.slug);
+  const { slug } = await params;
+  const name = await categoryName(slug);
   return { title: name ?? "Category" };
 }
 
@@ -21,15 +22,16 @@ export default async function CategoryPage({
   params,
   searchParams,
 }: {
-  params: { slug: string };
-  searchParams: { cursor?: string };
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ cursor?: string }>;
 }) {
+  const [{ slug }, { cursor }] = await Promise.all([params, searchParams]);
   const [name, { page, failed }] = await Promise.all([
-    categoryName(params.slug),
-    fetchArticlesSafe({ category: params.slug, cursor: searchParams.cursor }),
+    categoryName(slug),
+    fetchArticlesSafe({ category: slug, cursor }),
   ]);
 
-  const heading = name ?? params.slug.replace(/-/g, " ");
+  const heading = name ?? slug.replace(/-/g, " ");
 
   return (
     <>
@@ -44,7 +46,7 @@ export default async function CategoryPage({
         page={page}
         failed={failed}
         emptyMessage={`Nothing classified as ${heading} in the current window.`}
-        moreHref={`/category/${params.slug}?`}
+        moreHref={`/category/${slug}?`}
       />
     </>
   );

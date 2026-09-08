@@ -5,9 +5,12 @@ import { fetchArticlesSafe } from "@/lib/api";
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: { cursor?: string };
+  // Promises since Next 15: the framework no longer resolves route inputs
+  // before the component runs, so they are awaited like any other async data.
+  searchParams: Promise<{ cursor?: string }>;
 }) {
-  const { page, failed } = await fetchArticlesSafe({ cursor: searchParams.cursor });
+  const { cursor } = await searchParams;
+  const { page, failed } = await fetchArticlesSafe({ cursor });
 
   return (
     <>

@@ -11,9 +11,10 @@ async function countryName(slug: string): Promise<string | null> {
 export async function generateMetadata({
   params,
 }: {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
-  const name = await countryName(params.slug);
+  const { slug } = await params;
+  const name = await countryName(slug);
   return { title: name ?? "Country" };
 }
 
@@ -21,19 +22,20 @@ export default async function CountryPage({
   params,
   searchParams,
 }: {
-  params: { slug: string };
-  searchParams: { cursor?: string };
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ cursor?: string }>;
 }) {
+  const [{ slug }, { cursor }] = await Promise.all([params, searchParams]);
   const [name, { page, failed }] = await Promise.all([
-    countryName(params.slug),
-    fetchArticlesSafe({ country: params.slug, cursor: searchParams.cursor }),
+    countryName(slug),
+    fetchArticlesSafe({ country: slug, cursor }),
   ]);
 
   // An unknown slug is shown as an empty country rather than a 404. The
   // reference list is cached for an hour, so a country enabled ten minutes ago
   // is legitimately absent from it — and a 404 for a page that exists is a
   // worse answer than an empty one.
-  const heading = name ?? params.slug.replace(/-/g, " ");
+  const heading = name ?? slug.replace(/-/g, " ");
 
   return (
     <>
@@ -48,7 +50,7 @@ export default async function CountryPage({
         page={page}
         failed={failed}
         emptyMessage={`Nothing filed under ${heading} in the current window. Country tagging is automatic and errs towards leaving a story out rather than filing it wrongly.`}
-        moreHref={`/country/${params.slug}?`}
+        moreHref={`/country/${slug}?`}
       />
     </>
   );
