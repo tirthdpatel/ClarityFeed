@@ -182,6 +182,11 @@ Hourly cron. Must include:
 `/internal/collect` and `INTERNAL_SECRET` have since been deleted — the
 webhook and its shared-secret surface are gone entirely (§1).
 
+> **Forward plan:** everything past this point is superseded by
+> [ROADMAP.md](ROADMAP.md), which starts from the verified current state and
+> runs to launch — including the read API and frontend (neither of which
+> exists yet) and the legal/policy surface.
+
 ### 3.5 Then: HNSW index, `vector_json` drop, Argos translation
 
 - HNSW is still not built. Embeddings now exist (367 rows), so the original
