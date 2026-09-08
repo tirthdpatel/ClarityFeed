@@ -78,6 +78,10 @@ def _published_query(db: Session):
         .join(Source, Source.id == RawArticle.source_id)
         .filter(RawArticle.ingest_status == "PUBLISHED")
         .filter(Source.is_active.is_(True))
+        # A takedown must take effect on the next request, not on the next
+        # purge. Setting the column is the whole remedy; deleting the rows is
+        # cleanup that can follow at leisure.
+        .filter(Source.takedown_requested_at.is_(None))
     )
 
 

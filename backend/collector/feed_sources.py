@@ -148,8 +148,20 @@ class FeedSourceRepository:
         self._db = db
 
     def get_active_sources(self) -> List[Source]:
-        """Return all sources where ``is_active`` is True."""
-        return self._db.query(Source).filter(Source.is_active.is_(True)).all()
+        """Return sources that are active and not under a takedown request.
+
+        The takedown check is here rather than at the call sites because this
+        is the single place the pipeline learns what to fetch. A publisher who
+        has asked to be removed should stop being *requested*, not merely stop
+        being displayed — continuing to hit their servers after they asked us
+        to stop is the part that turns a polite email into an angry one.
+        """
+        return (
+            self._db.query(Source)
+            .filter(Source.is_active.is_(True))
+            .filter(Source.takedown_requested_at.is_(None))
+            .all()
+        )
 
     def seed_default_sources(self) -> int:
         """Insert the default international RSS sources if the table is empty.

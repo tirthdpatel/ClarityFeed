@@ -103,6 +103,34 @@ def test_inactive_source_article_is_hidden(client):
     assert client.get("/articles/5").status_code == 404
 
 
+def test_takedown_hides_articles_immediately(client, db_session):
+    """Setting the column is the whole remedy — purging rows can follow later."""
+    assert client.get("/articles/1").status_code == 200
+
+    source = db_session.get(Source, 1)
+    source.takedown_requested_at = datetime(2026, 9, 8, 9, 0, 0)
+    source.takedown_requested_by = "legal@pub.example"
+    db_session.commit()
+
+    assert client.get("/articles/1").status_code == 404
+    ids = {a["id"] for a in client.get("/articles").json()["articles"]}
+    assert ids == {3}, "a taken-down publisher was still being served"
+
+
+def test_takedown_stops_us_fetching_the_feed(db_session):
+    """The publisher asked us to stop, which means stop requesting — not
+    merely stop displaying."""
+    from backend.collector.feed_sources import FeedSourceRepository
+
+    repo = FeedSourceRepository(db_session)
+    assert 1 in {s.id for s in repo.get_active_sources()}
+
+    db_session.get(Source, 1).takedown_requested_at = datetime(2026, 9, 8)
+    db_session.commit()
+
+    assert 1 not in {s.id for s in repo.get_active_sources()}
+
+
 # -- the permission gate ----------------------------------------------------
 
 

@@ -87,6 +87,15 @@ class Source(Base):
     # is not equivalent to one blog post.
     editorial_weight = Column(Float, nullable=False, default=1.0)
 
+    # Migration 005 — V2 §11. A takedown is durable state, not an is_active
+    # flag: a source disabled by the circuit breaker should come back when the
+    # feed recovers, and a source removed at its publisher's request must not.
+    # One boolean cannot hold both meanings, and the failure mode is somebody
+    # tidying up a list of inactive feeds six months later.
+    takedown_requested_at = Column(DateTime, nullable=True, index=True)
+    takedown_requested_by = Column(String(255), nullable=True)
+    takedown_note = Column(Text, nullable=True)
+
     raw_articles = relationship("RawArticle", back_populates="source", lazy="dynamic")
 
     def __repr__(self) -> str:
