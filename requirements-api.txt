@@ -1,0 +1,29 @@
+# Runtime dependencies for the read API only.
+#
+# requirements.txt is shared with the ingestion pipeline and pulls in
+# scikit-learn, numpy, lxml, feedparser, newspaper4k, readability and groq —
+# roughly 200 MB that the API process imports none of. Ingestion runs in the
+# GitHub Actions runner (see .github/workflows/ingest.yml), not here, so the
+# API host was installing a second copy of the pipeline in order to serve
+# JSON.
+#
+# That mattered for more than tidiness: the free tier this targets has a
+# 512 MB memory ceiling, and build time is dead time on every deploy.
+#
+# Verified by installing exactly this list into an empty environment and
+# importing backend.api.main. If that import starts failing, something in the
+# API path has grown a dependency on the pipeline — which is worth knowing
+# about rather than papering over by adding the package back here.
+#
+# The pipeline's own list stays in requirements.txt / requirements-ingest.txt.
+
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+sqlalchemy==2.0.30
+psycopg2-binary==2.9.9
+pydantic==2.7.1
+pydantic-settings==2.2.1
+python-dotenv==1.0.1
+
+# Migrations run on deploy, so the migration tool ships with the API.
+alembic==1.13.2

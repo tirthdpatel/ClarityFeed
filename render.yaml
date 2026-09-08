@@ -1,17 +1,59 @@
+# Render service definition for the read API.
+#
+# This host serves JSON and nothing else. Ingestion runs in GitHub Actions
+# (.github/workflows/ingest.yml) and writes to the database directly, so
+# nothing here fetches feeds, calls an LLM, or embeds anything — which is why
+# the dependency list and the environment below are both much smaller than the
+# repo's defaults.
+#
+# On the free tier the service spins down after ~15 minutes idle and takes
+# roughly a minute to wake. That is survivable here because the frontend
+# serves every page through ISR with `s-maxage=300, stale-while-revalidate=600`
+# (see backend/api/articles.py): a reader gets the cached page immediately and
+# the cold start lands on a background revalidation instead of on a person.
+
 services:
   - type: web
-    name: news-aggregator-backend
+    name: clarityfeed-api
     env: python
-    buildCommand: pip install -r requirements.txt
+    plan: free
+    region: oregon
+
+    # requirements-api.txt, not requirements.txt — see that file's header.
+    # The shared list installs ~200 MB of pipeline dependencies the API
+    # process never imports, against a 512 MB ceiling.
+    buildCommand: pip install -r requirements-api.txt
+
+    # Migrations run before the new instance serves traffic. Render holds the
+    # old instance until this succeeds, so a failed migration is a failed
+    # deploy rather than a live service against a half-migrated schema.
+    preDeployCommand: alembic upgrade head
+
     startCommand: uvicorn backend.api.main:app --host 0.0.0.0 --port $PORT
+
+    # Readiness, not liveness: this one checks the database, so Render stops
+    # routing to an instance that cannot reach Postgres instead of restarting
+    # it in a loop over someone else's outage.
+    healthCheckPath: /ready
+
     envVars:
+      # The Supabase SESSION POOLER host. The direct db.<ref>.supabase.co host
+      # is IPv6-only and will hang rather than fail loudly.
       - key: DATABASE_URL
         sync: false
-      - key: GROQ_API_KEY
-        sync: false
-      - key: HF_API_TOKEN
-        sync: false
+
+      # Comma-separated, no wildcard. validate_or_die() refuses to boot in
+      # production on a wildcard, because a wildcard plus credentials is both
+      # rejected by browsers and unsafe.
       - key: FRONTEND_URL
         sync: false
+
+      - key: APP_ENV
+        value: production
       - key: PYTHON_VERSION
-        value: 3.11.0
+        value: "3.11.0"
+
+# GROQ_API_KEY and HF_API_TOKEN are deliberately absent. Summarisation and
+# embedding happen in the Actions runner; the API only reads what they wrote,
+# so shipping those keys to this host would widen the blast radius of a
+# compromise for no functional gain.

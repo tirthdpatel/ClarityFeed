@@ -6,12 +6,15 @@ live, and what was deliberately left out.
 
 ## Start here: why this is not the production deployment
 
-ClarityFeed runs on Render (API) + Neon (Postgres) + GitHub Actions (ingestion).
-That stack was chosen deliberately and is documented in
-[technology_decisions.md](technology_decisions.md) under a hard constraint:
-**zero cost, zero devices.** Render needs no credit card, Neon's free tier is
-permanent, and Actions provides free cron. One of the stated reasons for
-choosing Render was that it needs *no Docker at all*.
+ClarityFeed runs on Vercel (frontend) + Render (API) + Supabase (Postgres) +
+GitHub Actions (ingestion). That stack was chosen deliberately and is
+documented in [technology_decisions.md](technology_decisions.md) under a hard
+constraint: **zero cost, zero devices.** None of the four needs a credit card,
+and Actions provides free cron. One of the stated reasons for choosing Render
+was that it needs *no Docker at all*.
+
+(V2 named Neon here; the database moved to Supabase in Phase 0 — V3 Part H
+decision 1 — because Neon's 100 compute-hours is a hard wall.)
 
 Kubernetes contradicts that constraint. A cluster has to run somewhere, and
 somewhere is not free.
