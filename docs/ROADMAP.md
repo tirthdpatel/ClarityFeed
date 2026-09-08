@@ -15,6 +15,27 @@ is actually in the repository and running.
 
 ---
 
+## Progress
+
+| Phase | State |
+|---|---|
+| 3 — Read API | **Done.** `/articles`, `/articles/{id}`, `/countries`, `/categories`, `/languages`. Cursor pagination, permission gate on every path, rate limiting, `noindex`. |
+| 4 — Permissions | **Done.** Restrictive defaults kept, `takedown_requested_at` added and enforced at both the read path and the fetch path. |
+| 5 — Frontend | **Done.** Next.js on Vercel. Design arbitrated by `.claude/skills/design-council`. |
+| 6 — Legal surface | **Mostly done.** About page carries non-affiliation, non-commercial framing, AI disclosure, takedown route and privacy note. Contact address live. |
+| 7 — Hardening | **Partial.** Security headers and a clean `npm audit` (Next 16) shipped. Alerting, error tracking and uptime monitoring still open. |
+| 8 — Ship | **Frontend live**, unlisted: https://clarityfeed-tirthdpatels-projects.vercel.app — Vercel Authentication disabled so the link works for anyone who has it. Backend not yet deployed. |
+
+**The one blocker:** the API is not deployed, so the site renders its empty
+state. `render.yaml` is ready; it needs a Render service and
+`NEXT_PUBLIC_API_URL` set on the Vercel project.
+
+**Also open:** the GitHub repo is private, which caps Actions at 2,000
+minutes/month against an hourly ingest schedule. V3 Part H decision 2 assumed
+public. Decide before the cap bites.
+
+---
+
 ## 0. Where this starts
 
 **Verified working:**
