@@ -72,11 +72,48 @@ PLACEHOLDERS_AND_NORMAL_CODE = [
     ),
     pytest.param("GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxx", id="groq-placeholder"),
     pytest.param('DATABASE_URL: str = "sqlite:///./test.db"', id="sqlite-default"),
+    # Env-form assignments that are not credentials, and credential-named ones
+    # whose value is empty or a placeholder. The env-assigned-secret rule has
+    # to stay quiet on all of these or a .env file becomes unstageable.
+    pytest.param("LLM_DAILY_CALL_BUDGET=200", id="numeric-config"),
+    pytest.param("APP_ENV=production", id="plain-config"),
+    pytest.param("GEMINI_API_KEY=", id="empty-key"),
+    pytest.param("GEMINI_API_KEY=changeme", id="placeholder-key"),
     pytest.param(
         "response = await client.post(self._hf_url, headers=self._headers)",
         id="ordinary-code",
     ),
 ]
+
+
+@pytest.mark.parametrize(
+    "line,expected_rule",
+    [
+        # Google issues more than one credential shape; the AIza rule covers
+        # AI Studio API keys only. This one was found the hard way: a real
+        # OAuth token went into .env and the scanner called the file clean.
+        pytest.param(
+            "GEMINI_API_KEY=AQ.Ab8RN6I2aVBNd10bQcz1uVC7JvPd0FWpwhXZ00gI2adOD0iOfg",
+            "google-oauth-token",
+            id="google-oauth-token",
+        ),
+        # Bare, unquoted, env-file form — the shape a pasted key actually takes.
+        pytest.param(
+            "SOME_SERVICE_TOKEN=9f2c4b8a1e7d6c3f0a5b2e9d",
+            "env-assigned-secret",
+            id="unquoted-env-assignment",
+        ),
+        pytest.param(
+            "export MY_SECRET=abcdef0123456789abcdef",
+            "env-assigned-secret",
+            id="shell-export",
+        ),
+    ],
+)
+def test_env_form_credentials_are_detected(line: str, expected_rule: str) -> None:
+    findings = scan_text(line, "backend/some_module.py")
+    assert findings, f"scanner missed: {expected_rule}"
+    assert findings[0][1].name == expected_rule
 
 
 @pytest.mark.parametrize("line,expected_rule", REAL_SECRETS)

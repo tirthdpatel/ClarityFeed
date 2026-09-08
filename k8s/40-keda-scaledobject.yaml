@@ -57,7 +57,16 @@ spec:
   # Never scale to zero. A worker at rest costs ~100m CPU, and cold-starting the
   # pool would add a minute of latency to the first article after every quiet
   # period. Scale-to-zero is worth it for spiky expensive workloads, not this.
-  idleReplicaCount: null
+  #
+  # Expressed by OMITTING idleReplicaCount, not by setting it to null. The CRD
+  # schema types this field as an integer, so `idleReplicaCount: null` is
+  # rejected by the API server and takes the whole `kubectl apply -k` with it.
+  # Omitted, KEDA scales between minReplicaCount and maxReplicaCount and never
+  # reaches zero, which is the behaviour actually wanted.
+  #
+  # This was invalid from the day it was written and nobody found out, because
+  # the manifests had never been applied to a cluster. The kubeconform job in
+  # .github/workflows/k8s.yml caught it on its first run.
 
   advanced:
     horizontalPodAutoscalerConfig:

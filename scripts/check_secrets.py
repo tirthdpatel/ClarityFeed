@@ -114,6 +114,37 @@ RULES: tuple[Rule, ...] = (
         "A Google/Gemini API key. Rotate in Google AI Studio.",
     ),
     Rule(
+        "google-oauth-token",
+        # Google issues more than one credential shape. The AIza rule above
+        # covers AI Studio API keys; OAuth access and refresh tokens look
+        # nothing like them and were slipping through both that rule and the
+        # generic one below. Found when a real key was added to .env and the
+        # scanner reported the file clean.
+        re.compile(r"\bAQ\.[A-Za-z0-9_\-]{30,}"),
+        "A Google OAuth token. Revoke it in the Google Cloud console or AI "
+        "Studio; these grant account access, not just API quota.",
+    ),
+    Rule(
+        "env-assigned-secret",
+        # The generic rule below only fires on quoted values, which is the
+        # shape credentials take in source. In a .env file or a shell export
+        # they are bare, so a pasted key on the right-hand side of `=` matched
+        # nothing at all.
+        # Case-sensitive and space-sensitive on purpose. An earlier version
+        # used (?i) and allowed spaces around `=`, which made it match ordinary
+        # Python — `key = country.strip()`, `max_tokens=settings.LLM_MAX_TOKENS`,
+        # `color_token = Column(...)` — seven false positives across the repo.
+        # Environment assignments are SCREAMING_CASE, have no spaces around the
+        # equals sign, and the value runs to end of line.
+        re.compile(
+            r"(?m)^\s*(?:export\s+)?[A-Z][A-Z0-9_]*"
+            r"(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL)[A-Z0-9_]*"
+            r"=[^\s'\"#]{16,}\s*$"
+        ),
+        "A credential assigned in environment-variable form. Keep it in .env "
+        "(gitignored) rather than in a tracked file.",
+    ),
+    Rule(
         "aws-access-key",
         re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"),
         "An AWS access key ID.",
