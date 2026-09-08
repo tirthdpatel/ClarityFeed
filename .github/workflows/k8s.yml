@@ -100,6 +100,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The collector image carries sentence-transformers and therefore torch,
+      # roughly 2.5 GB, because embedding runs locally above the publish
+      # barrier. A kind node keeps its own containerd store on the runner's
+      # root filesystem, and unpacking that layer filled it: the first run of
+      # this workflow died with "no space left on device" partway through
+      # extracting torch.
+      #
+      # GitHub runners ship ~25 GB of preinstalled toolchains this project
+      # never uses. Reclaiming them is cheaper and more honest than trimming
+      # the image to fit CI, which would make the thing under test differ from
+      # the thing that ships.
+      - name: Reclaim disk space
+        run: |
+          set -euo pipefail
+          echo "Before:"; df -h / | tail -1
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android \
+                      /usr/local/share/boost /opt/hostedtoolcache/CodeQL \
+                      /usr/local/share/powershell /usr/share/swift || true
+          sudo docker image prune --all --force >/dev/null 2>&1 || true
+          echo "After:"; df -h / | tail -1
+
       - name: Create cluster
         uses: helm/kind-action@v1
         with:
