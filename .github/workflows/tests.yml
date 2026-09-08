@@ -130,5 +130,13 @@ jobs:
 
           # A downgrade nobody has ever run is not a rollback plan. This proves
           # the path exists before it is needed at two in the morning.
-          alembic downgrade base
+          #
+          # Down to 001_baseline, not to base: 001_baseline.downgrade() raises
+          # NotImplementedError on purpose, because going below it drops every
+          # table. That guard is correct and this job originally tripped over
+          # it — the migration was right and the test was wrong. The range that
+          # is genuinely reversible is everything above the baseline, so that
+          # is what gets exercised.
+          alembic downgrade 001_baseline
           alembic upgrade head
+          alembic current

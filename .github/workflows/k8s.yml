@@ -220,41 +220,60 @@ jobs:
           curl -sSf localhost:8000/articles | tee /tmp/articles.json
           python3 -c "import json;d=json.load(open('/tmp/articles.json'));assert 'articles' in d and 'hasMore' in d, d"
 
+      # Both tests below must run INSIDE the cluster.
+      #
+      # `kubectl port-forward svc/...` looks like it targets the Service, but
+      # it resolves the Service to a single pod once and tunnels to that pod
+      # for the life of the connection. It therefore cannot observe load
+      # balancing at all, and it breaks outright when its chosen pod is
+      # replaced — which is exactly what a rolling-update test does. The first
+      # version of these steps used it and was measuring nothing.
+      - name: Start an in-cluster probe pod
+        run: |
+          set -euo pipefail
+          kubectl -n clarity run probe --image=curlimages/curl:8.10.1 \
+            --restart=Never --command -- sleep 3600
+          kubectl -n clarity wait --for=condition=Ready pod/probe --timeout=3m
+
       - name: The Service load balances across replicas
         run: |
           set -euo pipefail
-          kubectl -n clarity port-forward svc/clarity-api 8001:8000 &
-          sleep 5
-          # /health reports the pod name via the downward API, so distinct
-          # values prove requests are genuinely reaching different replicas
-          # rather than one pod answering everything.
-          for _ in $(seq 1 30); do
-            curl -sSf localhost:8001/health | python3 -c "import sys,json;print(json.load(sys.stdin)['instance'])"
-          done | sort -u | tee /tmp/instances.txt
-          test "$(wc -l < /tmp/instances.txt)" -ge 2
+          # /health reports its pod name via the downward API, so distinct
+          # values prove requests genuinely reach different replicas rather
+          # than one pod answering everything.
+          kubectl -n clarity exec probe -- sh -c '
+            for i in $(seq 1 60); do
+              curl -sf http://clarity-api:8000/health
+              echo
+            done' | grep -o '"instance":"[^"]*"' | sort -u | tee /tmp/instances.txt
+
+          count=$(wc -l < /tmp/instances.txt)
+          echo "Distinct replicas observed: $count"
+          test "$count" -ge 2
 
       - name: A rolling update keeps serving
         run: |
           set -euo pipefail
-          kubectl -n clarity port-forward svc/clarity-api 8002:8000 &
-          sleep 5
-
-          # maxUnavailable: 0 is the claim in 20-api.yaml. Restart every pod
-          # while polling, and require that no request fails.
-          ( for _ in $(seq 1 120); do
-              curl -sSf -o /dev/null localhost:8002/health || echo "FAILED" >> /tmp/rollout-errors
-              sleep 0.5
-            done ) &
+          # maxUnavailable: 0 is the claim made by 20-api.yaml. Restart every
+          # pod while hammering the Service from inside the cluster, and
+          # require that not one request fails.
+          kubectl -n clarity exec probe -- sh -c '
+            fails=0
+            for i in $(seq 1 150); do
+              curl -sf -o /dev/null http://clarity-api:8000/health || fails=$((fails+1))
+              sleep 0.4
+            done
+            echo "FAILURES=$fails"' > /tmp/rollout.txt 2>&1 &
           POLLER=$!
 
+          sleep 3
           kubectl -n clarity rollout restart deployment/clarity-api
           kubectl -n clarity rollout status deployment/clarity-api --timeout=5m
           wait $POLLER || true
 
-          if [ -s /tmp/rollout-errors ]; then
-            echo "Requests failed during the rolling update:"; cat /tmp/rollout-errors; exit 1
-          fi
-          echo "No failed requests during the rolling update."
+          cat /tmp/rollout.txt
+          grep -q "FAILURES=0" /tmp/rollout.txt
+          echo "Zero failed requests across a full rolling update."
 
       - name: KEDA scales workers on queue depth
         run: |
