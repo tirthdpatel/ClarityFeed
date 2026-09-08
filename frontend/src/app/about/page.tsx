@@ -12,11 +12,11 @@ export const metadata: Metadata = { title: "About" };
  * sentence here is true; none of it is apologetic.
  */
 
-// TODO(before deploy): replace with a real address you actually read. This is
-// the entire takedown process at this scale — a publisher who emails and gets
-// a same-day reply has no reason to escalate. Leaving the placeholder live
-// would be worse than having no contact section at all.
-const CONTACT_EMAIL = "you@example.com";
+// The entire takedown process at this scale. A publisher who emails and gets a
+// same-day reply has no reason to escalate, which is what actually prevents
+// disputes — not the wording of any policy. It must stay an address someone
+// reads.
+const CONTACT_EMAIL = "v.tirthpatel@gmail.com";
 
 export default function AboutPage() {
   return (
