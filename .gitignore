@@ -75,3 +75,11 @@ _to_delete/
 # Container / Kubernetes local state
 .env
 *.env.local
+
+# Third-party agent skills, vendored by `skills`/`skillfish` into the project.
+# Reinstallable from skills-lock.json, so the lockfile is tracked and the
+# copies are not — the same reasoning as node_modules. .claude/skills holds
+# symlinks into here, so it follows.
+.agents/
+.claude/skills/*
+!.claude/skills/design-council/

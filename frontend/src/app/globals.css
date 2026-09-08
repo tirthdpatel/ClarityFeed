@@ -1,0 +1,504 @@
+/*
+ * Two complete palettes, not one palette inverted. Inverting the light theme
+ * produces the muddy grey the design brief exists to prevent (V3 F2), so dark
+ * mode redefines the tokens rather than filtering them.
+ *
+ * Contrast is checked against WCAG AA at both ends: --fg on --bg and
+ * --fg-muted on --bg-subtle are the two pairs that carry actual text.
+ *
+ * TYPE: a serif for headlines and a sans for furniture. This is the oldest
+ * convention in news typography and it is doing real work here — it separates
+ * what a publisher wrote from what the interface says around it, at a glance
+ * and before you read a word. The stacks are system faces on purpose: Georgia
+ * and Charter ship everywhere, and a webfont would put a network request in
+ * front of the headline for no gain a reader would notice.
+ */
+
+:root {
+  /* Cool paper, not warm cream. The near-#F4F1EA cream with a serif display
+     is the most-recognised generated-page palette there is; this reads as
+     newsprint under daylight rather than under a lamp, and it lets the
+     per-source hues sit on it without every one of them turning muddy. */
+  --bg: #f4f6f7;
+  --bg-subtle: #e9edee;
+  --bg-raised: #fbfcfc;
+  --border: #d8dee0;
+  --border-strong: #b0babd;
+  --fg: #141a1c;
+  --fg-muted: #4a5457;      /* 7.9:1 on --bg */
+  --fg-faint: #6d777a;      /* 4.8:1 on --bg */
+  --accent: #0f5b78;
+  --accent-fg: #ffffff;
+  --accent-soft: #dfebf0;
+  --ai-bg: #eaeff1;
+  --ai-border: #9fb3ba;
+  --ai-fg: #34474d;         /* 7.6:1 on --ai-bg */
+  --focus: #0f5b78;
+
+  /* Per-source identity. The hue is set per card by ArticleCard; only the
+     saturation and lightness live here, because those are what has to change
+     between the two themes.
+
+     The derived colours are composed on .card, NOT here: a custom property
+     resolves the var()s inside its own value against the element it is
+     declared on, so building --source-ink at :root would bake in the root's
+     fallback hue and every publisher would come out the same colour. */
+  --source-hue: 200;
+  --source-ink-s: 52%;
+  --source-ink-l: 30%;
+  --source-rail-s: 45%;
+  --source-rail-l: 62%;
+
+  --serif: ui-serif, Charter, "Iowan Old Style", Georgia, "Times New Roman", serif;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  --radius: 5px;
+  --measure: 64ch;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101618;
+    --bg-subtle: #172023;
+    --bg-raised: #182124;
+    --border: #27343700;
+    --border: #273437;
+    --border-strong: #3d4d51;
+    --fg: #eef3f4;
+    --fg-muted: #a8b4b7;    /* 8.4:1 on --bg */
+    --fg-faint: #7d8a8d;    /* 4.9:1 on --bg */
+    --accent: #6bc3e0;
+    --accent-fg: #08222c;
+    --accent-soft: #17313a;
+    --ai-bg: #1a2427;
+    --ai-border: #43585e;
+    --ai-fg: #b6c8cd;       /* 8.0:1 on --ai-bg */
+    --focus: #6bc3e0;
+
+    /* Lifted and desaturated for a dark ground: the light-theme values go
+       nearly black here and every publisher stops being distinguishable. */
+    --source-ink-s: 55%;
+    --source-ink-l: 72%;
+    --source-rail-s: 40%;
+    --source-rail-l: 45%;
+    color-scheme: dark;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* A visible, high-contrast focus ring on every interactive element. Removing
+   the default without replacing it makes the site unusable by keyboard, which
+   is the single most common accessibility failure on sites like this. */
+:focus-visible {
+  outline: 2.5px solid var(--focus);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+a { color: inherit; }
+
+/* Removes the ~300ms synthetic click delay some mobile browsers still apply,
+   and replaces the default blue flash with something that belongs to this
+   palette rather than to the OS. */
+a, button, .nav__link, .tag, .more {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* V3 F1: honoured rather than assumed. The design has little motion anyway,
+   which makes this nearly free. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--accent);
+  color: var(--accent-fg);
+  padding: 0.6rem 1rem;
+  z-index: 100;
+  font-weight: 600;
+}
+.skip-link:focus { left: 0; }
+
+.shell {
+  max-width: 58rem;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+/* -- masthead ------------------------------------------------------------ */
+
+.site-header {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-raised);
+}
+
+.site-header__inner {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-block: 1.6rem 1.3rem;
+}
+
+.site-header__brand {
+  font-family: var(--serif);
+  font-size: 1.85rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  text-decoration: none;
+  line-height: 1;
+}
+
+.site-header__tagline {
+  color: var(--fg-faint);
+  font-size: 0.8rem;
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+
+/* One nav rail, two rows inside it. The rows read as different kinds of thing
+   — sections, then places — rather than as one long undifferentiated list. */
+.nav-rail { border-top: 1px solid var(--border); }
+
+.nav {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.1rem 0.35rem;
+  padding-block: 0.55rem;
+}
+.nav + .nav { border-top: 1px dashed var(--border); }
+
+/* Sentence case, not a tracked-out uppercase eyebrow. The all-caps label above
+   a group is template chrome that shows up on generated pages regardless of
+   subject, and it costs legibility at this size for nothing. */
+.nav__label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--fg-faint);
+  margin-right: 0.7rem;
+  flex: 0 0 auto;
+}
+
+.nav__link {
+  display: inline-block;
+  padding: 0.28rem 0.6rem;
+  border-radius: 3px;
+  font-size: 0.875rem;
+  text-decoration: none;
+  color: var(--fg-muted);
+}
+.nav__link:hover { background: var(--bg-subtle); color: var(--fg); }
+.nav__link[aria-current="page"] { color: var(--accent); font-weight: 650; }
+
+/* -- page furniture ------------------------------------------------------ */
+
+.page-title {
+  font-family: var(--serif);
+  font-size: clamp(2rem, 1.4rem + 2.2vw, 2.75rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin: 2.25rem 0 0.4rem;
+}
+
+.page-sub {
+  color: var(--fg-faint);
+  margin: 0 0 1.75rem;
+  font-size: 0.9rem;
+  max-width: var(--measure);
+}
+
+/* -- the feed ------------------------------------------------------------ */
+
+/*
+ * Hairline-separated list rather than a grid of floating cards. A card grid
+ * says "these are tiles"; a ruled list says "these are stories, in order",
+ * which is what a chronological feed actually is — and it stops the page
+ * looking like a dashboard.
+ */
+.feed { list-style: none; margin: 0; padding: 0; }
+
+/*
+ * Every story is a record of where it came from, so provenance is the layout:
+ * a rail in the publisher's own colour runs down the left of each item, and
+ * the machine summary further in (see .ai-summary) sits deeper still. Distance
+ * from the rail is distance from the original reporting, which is the one
+ * relationship this product exists to make legible.
+ */
+.card {
+  /* Composed here so each card's own --source-hue is what gets substituted. */
+  --source-ink: hsl(var(--source-hue) var(--source-ink-s) var(--source-ink-l));
+  --source-rail: hsl(var(--source-hue) var(--source-rail-s) var(--source-rail-l));
+
+  position: relative;
+  padding: 1.5rem 0 1.75rem 1.35rem;
+  border-top: 1px solid var(--border);
+}
+.card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 1.55rem;
+  bottom: 1.8rem;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--source-rail);
+}
+.card:first-child { border-top: none; }
+.card:first-child::before { top: 0.3rem; }
+
+/* Two facts, not a middle-dot string. The publisher is the one that matters,
+   so it gets the colour and the weight; the time sits under it, quiet. */
+.card__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  font-size: 0.78rem;
+  color: var(--fg-faint);
+  margin: 0 0 0.45rem;
+}
+.card__source {
+  color: var(--source-ink);
+  font-weight: 650;
+  font-size: 0.86rem;
+  letter-spacing: -0.005em;
+}
+
+.card__title {
+  font-family: var(--serif);
+  font-size: 1.4rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.018em;
+  margin: 0 0 0.5rem;
+  max-width: var(--measure);
+}
+.card__title a { text-decoration: none; }
+.card__title a:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
+
+.card__desc {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 0.96rem;
+  line-height: 1.6;
+  max-width: var(--measure);
+}
+
+.card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.85rem 0 0;
+}
+.tag {
+  font-size: 0.73rem;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--fg-faint);
+  text-decoration: none;
+  background: var(--bg-raised);
+}
+.tag:hover { border-color: var(--border-strong); color: var(--fg-muted); }
+
+/* -- the AI summary block ------------------------------------------------ */
+
+/*
+ * Deliberately unlike the publisher's own words: different ground, a rule down
+ * the side, its own label. A reader should never have to work out which
+ * sentences a machine wrote — that is the entire mitigation (ROADMAP §6.2),
+ * and it only works if the block is impossible to mistake for the excerpt
+ * above it.
+ */
+/*
+ * Set in from the publisher's rail, on its own ground, with a dashed edge
+ * rather than a solid one: this is the one block on the page nobody at the
+ * publication wrote. The label is not decoration and no seat on the council
+ * may vote it away (design-council tie-break 1) — an unlabelled machine
+ * summary of a story about a named person is the actual risk in this product.
+ */
+.ai-summary {
+  margin: 0.95rem 0 0 1.1rem;
+  padding: 0.8rem 1rem;
+  background: var(--ai-bg);
+  border: 1px solid var(--ai-border);
+  border-left-style: dashed;
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  max-width: calc(var(--measure) - 1.1rem);
+}
+.ai-summary__label {
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--ai-fg);
+  margin: 0 0 0.35rem;
+}
+.ai-summary__text {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--fg-muted);
+}
+.ai-summary__bullets {
+  margin: 0.45rem 0 0;
+  padding-left: 1.15rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--fg-muted);
+}
+.ai-summary__bullets li { margin-bottom: 0.15rem; }
+.ai-summary__note {
+  margin: 0.55rem 0 0;
+  font-size: 0.75rem;
+  color: var(--fg-faint);
+}
+.ai-summary__note a { color: var(--fg-muted); }
+
+/* -- states -------------------------------------------------------------- */
+
+.notice {
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  border-radius: var(--radius);
+  padding: 1.5rem 1.6rem;
+  margin: 1.5rem 0;
+  max-width: var(--measure);
+}
+.notice__title {
+  font-family: var(--serif);
+  margin: 0 0 0.45rem;
+  font-size: 1.2rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.notice p { margin: 0; color: var(--fg-muted); font-size: 0.93rem; }
+
+.stale {
+  border-left: 3px solid var(--ai-border);
+  background: var(--ai-bg);
+  color: var(--ai-fg);
+  padding: 0.6rem 0.9rem;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-size: 0.83rem;
+  margin: 0 0 1.75rem;
+  max-width: var(--measure);
+}
+
+.more {
+  display: inline-block;
+  margin: 2rem 0 0;
+  padding: 0.55rem 1.15rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.more:hover { border-color: var(--fg-faint); background: var(--bg-subtle); }
+/* Motion answers an action and nothing else — no entrance animations, no
+   per-card hover lift. Studio calls those a generated-page tell and Guidelines
+   would make us gate them on prefers-reduced-motion anyway. */
+.more:active { transform: translateY(1px); }
+
+/* -- prose (about page) --------------------------------------------------- */
+
+.prose { max-width: var(--measure); padding-bottom: 2.5rem; }
+.prose h2 {
+  font-family: var(--serif);
+  font-size: 1.3rem;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+  margin: 2.25rem 0 0.6rem;
+}
+.prose p, .prose li { color: var(--fg-muted); font-size: 0.97rem; line-height: 1.65; }
+.prose a { color: var(--accent); text-underline-offset: 2px; }
+.prose code {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  padding: 0.05rem 0.32rem;
+  border-radius: 3px;
+  font-size: 0.87em;
+}
+
+/* -- footer --------------------------------------------------------------- */
+
+.site-footer {
+  border-top: 1px solid var(--border);
+  margin-top: 3.5rem;
+  padding-block: 1.75rem 3rem;
+  font-size: 0.83rem;
+  color: var(--fg-faint);
+  background: var(--bg-raised);
+}
+.site-footer p { margin: 0 0 0.45rem; max-width: var(--measure); line-height: 1.6; }
+.site-footer a { color: var(--fg-muted); }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+
+/* -- loading skeletons ---------------------------------------------------- */
+
+/*
+ * The pulse is the one piece of non-user-triggered motion on the site, and it
+ * earns its place: it distinguishes "waiting" from "broken", which is the
+ * whole question a reader has while the free-tier API wakes up. It is dropped
+ * entirely under prefers-reduced-motion by the global rule above, where a
+ * static skeleton still reads correctly.
+ */
+.skeleton {
+  background: var(--bg-subtle);
+  border-radius: 3px;
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.skeleton-card::before { background: var(--bg-subtle); }
+
+.skeleton--title { height: 2.4rem; width: 8rem; margin: 2.25rem 0 0.6rem; }
+.skeleton--sub { height: 0.9rem; width: 22rem; max-width: 80%; margin-bottom: 2rem; }
+.skeleton--source { height: 0.85rem; width: 7rem; margin-bottom: 0.7rem; }
+.skeleton--headline { height: 1.5rem; width: 90%; max-width: 34rem; margin-bottom: 0.7rem; }
+.skeleton--line { height: 0.85rem; width: 100%; max-width: 38rem; margin-bottom: 0.4rem; }
+.skeleton--line-short { width: 60%; }
