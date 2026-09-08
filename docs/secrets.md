@@ -15,7 +15,6 @@ repository that contains a real credential.
 | `DATABASE_URL` | `.env` | Actions secret | Render env var | — |
 | `GROQ_API_KEY` | `.env` | Actions secret | — | — |
 | `GEMINI_API_KEY` | `.env` | Actions secret | — | — |
-| `INTERNAL_SECRET` | `.env` | Actions secret | Render env var | — |
 | `HF_API_TOKEN` | `.env` | Actions secret | — | — |
 | `NEXT_PUBLIC_API_URL` | `.env.local` | — | — | Vercel env var |
 
@@ -75,7 +74,6 @@ The only fix is rotation.
 | Groq | console.groq.com → API Keys → revoke and recreate |
 | Gemini | aistudio.google.com → API keys |
 | HuggingFace | huggingface.co/settings/tokens |
-| `INTERNAL_SECRET` | `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
 
 Rotate first, clean history second. Cleaning history is optional; rotating is
 not.
@@ -128,7 +126,6 @@ within a week and then protects nothing.
 `settings.validate_or_die()` runs on API startup and **refuses to boot** when
 `APP_ENV=production` and any of the following hold:
 
-- `INTERNAL_SECRET` is still the default published in this repo, or is under 24 characters
 - `DATABASE_URL` is still the SQLite development default
 - `FRONTEND_URL` is a wildcard
 
@@ -153,7 +150,7 @@ python scripts/check_secrets.py
 ```
 
 **GitHub Actions:** Settings → Secrets and variables → Actions. Add
-`DATABASE_URL`, `GROQ_API_KEY`, `INTERNAL_SECRET`. Reference them as
+`DATABASE_URL` and `GROQ_API_KEY`. Reference them as
 `${{ secrets.NAME }}` — never echo one into a log; Actions masks known secret
 values but not strings you have derived from them.
 

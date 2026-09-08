@@ -71,13 +71,6 @@ PLACEHOLDERS_AND_NORMAL_CODE = [
         id="env-example-placeholder",
     ),
     pytest.param("GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxx", id="groq-placeholder"),
-    pytest.param(
-        'os.environ.setdefault("INTERNAL_SECRET", "test_secret_123")', id="test-fixture"
-    ),
-    pytest.param(
-        'INTERNAL_SECRET: str = "change_this_to_a_random_secret_string"',
-        id="settings-default",
-    ),
     pytest.param('DATABASE_URL: str = "sqlite:///./test.db"', id="sqlite-default"),
     pytest.param(
         "response = await client.post(self._hf_url, headers=self._headers)",

@@ -2,7 +2,6 @@
 ClarityFeed — FastAPI application entry point.
 
 This is the main application module deployed to Render. It:
- - Includes the internal trigger router (``/internal/collect``)
  - Seeds default RSS sources on first startup
  - Provides ``GET /health``, ``GET /ready`` and ``GET /sources`` endpoints
  - Configures CORS for the Vercel frontend
@@ -18,7 +17,6 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from backend.api.internal import router as internal_router
 from backend.collector.feed_sources import FeedSourceRepository
 from backend.database.session import get_db, init_db_with_retry
 from config.settings import settings
@@ -38,10 +36,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # ---- Startup ----
     logger.info("ClarityFeed starting up on Render free tier …")
 
-    # Fail fast on insecure production config (default INTERNAL_SECRET,
-    # SQLite URL, wildcard CORS). No-op outside production. This runs before
-    # anything binds, so a misconfigured deploy fails visibly instead of
-    # coming up exposed.
+    # Fail fast on insecure production config (SQLite URL, wildcard CORS).
+    # No-op outside production. This runs before anything binds, so a
+    # misconfigured deploy fails visibly instead of coming up exposed.
     settings.validate_or_die()
 
     init_db_with_retry()
@@ -103,10 +100,6 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
     max_age=600,
 )
-
-# -- Routers ----------------------------------------------------------------
-app.include_router(internal_router)
-
 
 # -- Public endpoints -------------------------------------------------------
 

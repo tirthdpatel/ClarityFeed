@@ -539,7 +539,7 @@ ClarityFeed/
 │   ├── components/
 │   └── lib/
 ├── .github/workflows/
-│   ├── ingest.yml                     ← REPLACES collect.yml (runs the pipeline)
+│   ├── ingest.yml                     ← REPLACED collect.yml (runs the pipeline)
 │   ├── retention.yml                  ← NEW: nightly cleanup
 │   └── test.yml                       ← NEW: CI
 └── tests/                             ← keep + extend

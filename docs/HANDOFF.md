@@ -124,11 +124,14 @@ number to watch against the workflow's 45-minute cap as sources are added.
 2. **Commit and push.** Everything is still untracked (§8). The Actions
    workflow cannot run until the repo exists on GitHub with `DATABASE_URL`
    and `GROQ_API_KEY` set as secrets.
-3. **Then, and only then, delete `/internal/collect`, `INTERNAL_SECRET` and
-   `.github/workflows/collect.yml`.** All three are still live and still
-   point at the old Render webhook. Do not remove them until an Actions run
-   of `ingest.yml` has succeeded — until then they are the only working
-   trigger in the repo.
+3. **Delete `/internal/collect`, `INTERNAL_SECRET` and
+   `.github/workflows/collect.yml`. — DONE.** Removed once `ingest.yml`
+   had several successful Actions runs, so the webhook was provably
+   redundant rather than merely superseded on paper. `backend/api/internal.py`,
+   `tests/unit/test_internal_endpoint.py` and the `INTERNAL_SECRET` branch of
+   `validate_or_die()` went with it: the shared-secret surface is gone rather
+   than secured. `validate_or_die()` still enforces the SQLite-URL and
+   wildcard-CORS checks.
 
 ### 3.1 Pipeline orchestrator (`backend/pipeline/runner.py`) — DONE
 
@@ -176,8 +179,8 @@ Hourly cron. Must include:
 - `workflow_dispatch` so it can be triggered by hand
 - concurrency group so two runs never overlap
 
-Delete `/internal/collect` and `INTERNAL_SECRET` once this works — the
-webhook and its shared-secret surface disappear entirely (§1).
+`/internal/collect` and `INTERNAL_SECRET` have since been deleted — the
+webhook and its shared-secret surface are gone entirely (§1).
 
 ### 3.5 Then: HNSW index, `vector_json` drop, Argos translation
 

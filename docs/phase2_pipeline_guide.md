@@ -4,7 +4,7 @@
 
 ```
                     ┌─────────────────────────────────────────────────────────────┐
-                    │                     POST /internal/collect                   │
+                    │            scripts/ingest.py (in the Actions runner)         │
                     │                    (GitHub Actions Cron)                     │
                     └───────────────────────────┬─────────────────────────────────┘
                                                 │
@@ -110,9 +110,9 @@ LIMIT 10;
 ### Manual Trigger via GitHub Actions
 
 1. Open your repository on GitHub
-2. Go to **Actions** → **collect** (or your workflow name)
+2. Go to **Actions** → **ingest**
 3. Click **Run workflow** → **Run workflow** (workflow_dispatch)
-4. The workflow triggers the `POST /internal/collect` endpoint with the secret header
+4. The runner executes `scripts/ingest.py` and writes to the database directly
 
 ## Storage Growth Estimate
 

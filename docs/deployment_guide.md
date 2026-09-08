@@ -86,7 +86,6 @@ See [neon_setup_guide.md](neon_setup_guide.md) for detailed instructions.
    | `DATABASE_URL` | Your Neon connection string |
    | `GROQ_API_KEY` | Your Groq API key |
    | `HF_API_TOKEN` | Your HuggingFace token |
-   | `INTERNAL_SECRET` | Any random string (e.g., `openssl rand -hex 32`) |
    | `FRONTEND_URL` | `*` (update after Vercel deploy) |
 
 6. Click **Create Web Service** and wait for the first deploy
@@ -98,12 +97,16 @@ See [neon_setup_guide.md](neon_setup_guide.md) for detailed instructions.
 
 1. Go to your repository on GitHub
 2. Navigate to **Settings → Secrets and variables → Actions**
-3. Add two secrets:
+3. Add the secrets the `ingest` workflow needs:
 
    | Secret Name | Value |
    |---|---|
-   | `RENDER_BACKEND_URL` | The Render URL from Step 5 |
-   | `INTERNAL_SECRET` | The same secret set in Render |
+   | `DATABASE_URL` | The same Neon/Supabase session-pooler string |
+   | `GROQ_API_KEY` | Your Groq API key |
+
+   Ingestion runs inside the Actions runner and writes to the database
+   directly. It does not call the Render API, so no backend URL or shared
+   trigger secret is involved.
 
 ---
 

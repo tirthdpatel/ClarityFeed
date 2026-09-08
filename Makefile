@@ -41,7 +41,6 @@ k8s-secrets: ## Create the real Secret from your .env (never committed)
 	  --from-literal=DATABASE_URL="$${DATABASE_URL:-postgresql://clarity@clarity-postgres:5432/clarity}" \
 	  --from-literal=PGPASSWORD="$$PW" \
 	  --from-literal=POSTGRES_PASSWORD="$$PW" \
-	  --from-literal=INTERNAL_SECRET="$${INTERNAL_SECRET:-$$($(PY) -c 'import secrets;print(secrets.token_urlsafe(32))')}" \
 	  --from-literal=GROQ_API_KEY="$${GROQ_API_KEY:-}" \
 	  --from-literal=GEMINI_API_KEY="$${GEMINI_API_KEY:-}" \
 	  --from-literal=HF_API_TOKEN="$${HF_API_TOKEN:-}" \

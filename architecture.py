@@ -81,7 +81,7 @@ Combined cold start:
     The GitHub Actions retry loop accommodates this.
 
 ==========================================================================
-4. GITHUB ACTIONS → RENDER TRIGGER ARCHITECTURE
+4. GITHUB ACTIONS INGESTION ARCHITECTURE
 ==========================================================================
 
 WHY GITHUB ACTIONS REPLACES APSCHEDULER:
@@ -92,20 +92,16 @@ WHY GITHUB ACTIONS REPLACES APSCHEDULER:
       3. Resource waste keeping the process alive just for scheduling
 
     GitHub Actions runs externally and independently:
-      1. GitHub fires the cron at */15 * * * *
-      2. The workflow sends an HTTP POST to Render
-      3. Render wakes (if sleeping) and runs the collection
-      4. Render goes back to sleep after inactivity
+      1. GitHub fires the cron (.github/workflows/ingest.yml)
+      2. The runner executes the pipeline itself (scripts/ingest.py)
+      3. It writes directly to the database; the API is not involved
 
-    This is more reliable, more debuggable (GitHub Actions logs), and
-    costs nothing on public repositories.
-
-INTERNAL_SECRET PROTECTION:
-    The ``POST /internal/collect`` endpoint requires a header:
-        ``X-Internal-Secret: <secret>``
-    The secret is set as a GitHub Actions secret and a Render environment
-    variable. The endpoint uses ``secrets.compare_digest()`` for constant-
-    time comparison to prevent timing attacks.
+NO WEBHOOK, NO SHARED SECRET:
+    An earlier design had the workflow POST to ``/internal/collect`` on
+    Render, authenticated by a shared ``INTERNAL_SECRET`` header. Running
+    the pipeline inside the runner removed the need for a public trigger
+    endpoint, so the endpoint and its shared-secret surface were deleted
+    rather than secured. See ARCHITECTURE_V2 §A3.
 
 ==========================================================================
 5. INTERFACE CONTRACTS (see backend/database/models.py)
@@ -126,7 +122,7 @@ INTERNAL_SECRET PROTECTION:
 +--------------------+----------------------------+-----------------------+
 | Stage              | Failure Mode               | Recovery Strategy     |
 +--------------------+----------------------------+-----------------------+
-| GitHub Actions     | Render unreachable         | 3x retry, 30s delay   |
+| GitHub Actions     | Runner/job failure         | Next hourly run       |
 | RSS Collection     | Single feed HTTP error     | Log, skip, continue   |
 |                    | Malformed feed XML         | Log, return empty     |
 |                    | robots.txt fetch failure   | Permissive fallback   |
@@ -140,7 +136,6 @@ INTERNAL_SECRET PROTECTION:
 | Database           | Neon connection timeout    | pool_pre_ping retry   |
 |                    | Neon auto-resume delay     | connect_timeout=10    |
 |                    | Duplicate article insert   | ON CONFLICT skip      |
-| API                | Invalid INTERNAL_SECRET    | 403 Forbidden         |
-|                    | Render cold start          | GitHub Actions retry  |
+| API                | Render cold start          | Read-only; retried    |
 +--------------------+----------------------------+-----------------------+
 """

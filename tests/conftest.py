@@ -37,7 +37,6 @@ _TMP_DB.unlink(missing_ok=True)
 
 # Must run before any `from config.settings import settings` anywhere.
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{_TMP_DB}")
-os.environ.setdefault("INTERNAL_SECRET", "test_secret_123")
 os.environ.setdefault("GROQ_API_KEY", "test_groq_key")
 os.environ.setdefault("HF_API_TOKEN", "test_hf_token")
 os.environ.setdefault("FRONTEND_URL", "http://localhost:3000")

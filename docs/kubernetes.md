@@ -382,7 +382,7 @@ Being able to say what you left out, and why, is worth as much as what you built
 | API pods `0/1 Running` | Readiness failing on Postgres | `kubectl -n clarity logs -l app=clarity-api` |
 | `sslmode` / SSL connection errors | `DB_SSLMODE` unset against in-cluster PG | ConfigMap must set `disable` |
 | Pod `CreateContainerConfigError` | Secret missing | `make k8s-secrets` |
-| API refuses to start, "insecure production configuration" | `INTERNAL_SECRET` empty with `APP_ENV=production` | Working as designed — set it |
+| API refuses to start, "insecure production configuration" | SQLite `DATABASE_URL` or wildcard `FRONTEND_URL` with `APP_ENV=production` | Working as designed — set them properly |
 | Collector OOMKilled | torch + MiniLM exceed the limit | Raise the memory limit above 2 Gi |
 | Nothing gets enriched | No LLM key, or nothing `PENDING` | Check worker logs and the status counts |
 

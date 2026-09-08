@@ -95,14 +95,6 @@ class Settings(BaseSettings):
     # validate_or_die() below.
     APP_ENV: str = "development"
 
-    # ---- Internal trigger endpoint security ----
-    #
-    # SECURITY: this default is published in the repository, so if the env var
-    # is unset in production the /internal/collect endpoint is "protected" by a
-    # string anyone can read on GitHub. validate_or_die() refuses to start in
-    # that state rather than logging a warning nobody reads.
-    INTERNAL_SECRET: str = "change_this_to_a_random_secret_string"
-
     # ---- API ----
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
@@ -194,14 +186,6 @@ class Settings(BaseSettings):
             return
 
         problems: list[str] = []
-
-        if self.INTERNAL_SECRET == "change_this_to_a_random_secret_string":
-            problems.append(
-                "INTERNAL_SECRET is still the default value published in the repo. "
-                "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
-            )
-        elif len(self.INTERNAL_SECRET) < 24:
-            problems.append("INTERNAL_SECRET is shorter than 24 characters.")
 
         if self.DATABASE_URL.startswith("sqlite"):
             problems.append(

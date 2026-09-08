@@ -45,7 +45,6 @@ services:
       APP_ENV: development
       LOG_LEVEL: INFO
       FRONTEND_URL: http://localhost:3000,http://localhost:8080
-      INTERNAL_SECRET: ${INTERNAL_SECRET:-local_dev_secret_not_for_production}
       LLM_PROVIDER: ${LLM_PROVIDER:-groq}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}

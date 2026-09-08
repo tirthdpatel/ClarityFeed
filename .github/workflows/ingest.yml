@@ -1,9 +1,9 @@
 # ClarityFeed ingestion — ARCHITECTURE_V2 §A3, §1 risk 11.
 #
-# This replaces the /internal/collect webhook. That endpoint needed a shared
-# secret, a public URL and a caller; this needs a cron line. Once a run here
-# has succeeded, delete the endpoint and INTERNAL_SECRET with it — the whole
-# shared-secret surface disappears rather than being secured.
+# This replaced the /internal/collect webhook. That endpoint needed a shared
+# secret, a public URL and a caller; this needs a cron line. The endpoint and
+# INTERNAL_SECRET were deleted once runs here succeeded — the shared-secret
+# surface is gone rather than secured.
 #
 # DATABASE_URL must be the Supabase *session pooler* host. The direct
 # db.<ref>.supabase.co host is IPv6-only and GitHub runners are IPv4-only,
