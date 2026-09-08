@@ -1,7 +1,7 @@
 # ClarityFeed — container and cluster workflows.
 # The non-container paths (Render, GitHub Actions) are unchanged; see README.md.
 .PHONY: help test images k8s-secrets k8s-load k8s-up k8s-down k8s-status \
-        compose-up compose-down compose-collect demo-seed demo-unseed \
+        api ingest worker demo-seed demo-unseed \
         demo-scale demo-heal demo-rollout keda-install
 
 NS   := clarity
@@ -15,16 +15,22 @@ help:
 test: ## Run the test suite
 	$(PY) -m pytest tests/ -q
 
-# --- docker compose ---------------------------------------------------------
-compose-up: ## Build and start the local stack
-	docker compose up --build -d
-	@echo "api: http://localhost:8000/health"
+# --- local development ------------------------------------------------------
+#
+# Run the processes directly. There is no local container stack and no local
+# Postgres: DATABASE_URL in .env points at Supabase, which is the same database
+# production uses, so there is nothing for a compose file to stand up.
+#
+# Each of these is one process doing one job — the same three the cluster runs
+# as an API Deployment, a CronJob and a worker Deployment.
+api: ## Serve the read API with reload on http://localhost:8000
+	$(PY) -m uvicorn backend.api.main:app --host 127.0.0.1 --port 8000 --reload
 
-compose-collect: ## Run one ingestion cycle against the local stack
-	docker compose run --rm collector
+ingest: ## Run one ingestion cycle (what the Actions cron runs hourly)
+	$(PY) scripts/ingest.py
 
-compose-down: ## Stop the stack and drop volumes
-	docker compose down -v
+worker: ## Run one enrichment worker in the foreground
+	$(PY) scripts/enrich_worker.py
 
 # --- images -----------------------------------------------------------------
 images: ## Build all three service images

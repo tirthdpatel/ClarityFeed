@@ -23,12 +23,17 @@ production. It exists because the enrichment stage genuinely benefits from
 independent scaling, and because the architecture already had the right seam for
 it — `raw_articles.enrichment_status = PENDING` was already a queue.
 
-### Quick start, containerised
+### Quick start
+
+No container runtime required. `DATABASE_URL` points at Supabase, the same
+database production uses, so there is no local stack to bring up.
 
 ```bash
-cp .env.example .env
-docker compose up --build          # Postgres + API + workers
-docker compose run --rm collector  # one ingestion cycle
+cp .env.example .env               # then paste your DATABASE_URL in
+python -m venv .venv && .venv/bin/pip install -r requirements.txt
+make api                           # read API on :8000
+make ingest                        # one ingestion cycle
+make worker                        # one enrichment worker
 ```
 
 ```bash

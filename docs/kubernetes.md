@@ -321,9 +321,14 @@ capabilities dropped.
 ```bash
 # local, containerised
 cp .env.example .env
-docker compose up --build
-docker compose run --rm collector          # one ingestion cycle
-docker compose up -d --scale worker=4      # fan out
+make api                                   # read API
+make ingest                                # one ingestion cycle
+make worker                                # one enrichment worker
+
+# There is no local container stack. The compose file was removed: it only
+# duplicated `make api|ingest|worker` against a local Postgres nobody uses,
+# since DATABASE_URL already points at Supabase. Scaling workers is what the
+# cluster below is for.
 
 # kubernetes
 minikube start && minikube addons enable ingress
