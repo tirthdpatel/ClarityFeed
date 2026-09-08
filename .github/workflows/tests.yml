@@ -1,0 +1,134 @@
+# The test suite, on both databases it has to work against.
+#
+# There was no workflow running the tests at all until now — they ran only on
+# whichever machine someone happened to be sitting at, against SQLite.
+#
+# The SQLite job is the fast one. The PostgreSQL job exists because SQLite
+# accepts SQL that PostgreSQL rejects, and that difference is not theoretical
+# here: the full suite passed green while GET /articles returned 500 against a
+# real database, because `SELECT DISTINCT` with an ORDER BY over a COALESCE is
+# legal in SQLite and an error in PostgreSQL. It took standing up an actual
+# cluster to notice. Production runs on PostgreSQL, so the tests do too.
+
+name: tests
+
+on:
+  push:
+    paths:
+      - "backend/**"
+      - "config/**"
+      - "scripts/**"
+      - "tests/**"
+      - "alembic/**"
+      - "requirements*.txt"
+      - ".github/workflows/tests.yml"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sqlite:
+    name: pytest (sqlite)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements.txt
+      - run: pytest tests/ -q
+
+  postgres:
+    name: pytest (postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: clarity
+          POSTGRES_PASSWORD: clarity
+          POSTGRES_DB: clarity_test
+        ports:
+          - 5432:5432
+        # Without this the steps below race the database's own startup.
+        options: >-
+          --health-cmd "pg_isready -U clarity"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements.txt
+
+      - name: Run the suite against PostgreSQL
+        env:
+          # Read by the db_session fixture in tests/unit/test_read_api.py.
+          # Everything else keeps its SQLite default: this job exists to cover
+          # the query layer, which is where the dialects actually diverge.
+          # noqa: secret — throwaway credentials for the ephemeral service
+          # container above, reachable only from this runner and destroyed with
+          # it. The scanner is right to ask; this is the documented answer.
+          TEST_DATABASE_URL: postgresql://clarity:clarity@localhost:5432/clarity_test  # noqa: secret
+        run: pytest tests/ -q
+
+  migrations:
+    name: alembic upgrade head
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: clarity
+          POSTGRES_PASSWORD: clarity
+          POSTGRES_DB: clarity_mig
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U clarity"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements-api.txt
+
+      - name: Migrations apply to an empty database, and roll back
+        env:
+          DATABASE_URL: postgresql://clarity:clarity@localhost:5432/clarity_mig  # noqa: secret
+          APP_ENV: development
+        run: |
+          set -euo pipefail
+          # render.yaml runs this as a pre-deploy step, so a migration that
+          # fails here is a deploy that would have failed in production.
+          alembic upgrade head
+          alembic current
+
+          # A downgrade nobody has ever run is not a rollback plan. This proves
+          # the path exists before it is needed at two in the morning.
+          alembic downgrade base
+          alembic upgrade head

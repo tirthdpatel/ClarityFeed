@@ -3,9 +3,21 @@
 The point of most of these is not that the endpoints work — it is that the
 permission gate and the publish barrier have no bypass. A gate that holds for
 the paths someone remembered to check is not a gate.
+
+RUNS ON TWO DATABASES. By default this uses in-memory SQLite, which is fast
+and needs nothing installed. Set TEST_DATABASE_URL and the identical tests run
+against PostgreSQL instead; CI does exactly that (.github/workflows/tests.yml).
+
+That is not belt-and-braces. SQLite accepts SQL that PostgreSQL rejects, and
+this suite passed in full while GET /articles returned 500 against a real
+database — `SELECT DISTINCT` with an ORDER BY over a COALESCE, which Postgres
+refuses and SQLite waves through. The bug reached a deployed cluster before
+anything caught it. Running the same assertions on the dialect that actually
+serves production is the cheapest way to not repeat that.
 """
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta
 
 import pytest
@@ -29,14 +41,22 @@ from backend.database.session import get_db
 
 @pytest.fixture
 def db_session():
-    # StaticPool: without it each checkout opens a fresh :memory: database
-    # and the schema created above is simply not there.
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
+    test_url = os.environ.get("TEST_DATABASE_URL")
+    if test_url:
+        # Real PostgreSQL. Dropping first makes the fixture idempotent when a
+        # previous run died before its teardown.
+        engine = create_engine(test_url)
+        Base.metadata.drop_all(engine)
+        Base.metadata.create_all(engine)
+    else:
+        # StaticPool: without it each checkout opens a fresh :memory: database
+        # and the schema created above is simply not there.
+        engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        Base.metadata.create_all(engine)
     session = sessionmaker(bind=engine)()
 
     session.add_all(
@@ -78,6 +98,9 @@ def db_session():
     yield session
     app.dependency_overrides.clear()
     session.close()
+    if os.environ.get("TEST_DATABASE_URL"):
+        Base.metadata.drop_all(engine)
+    engine.dispose()
 
 
 @pytest.fixture

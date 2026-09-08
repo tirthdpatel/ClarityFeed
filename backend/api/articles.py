@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from backend.api.serializers import serialize_articles
@@ -101,18 +101,36 @@ def list_articles(
     """A page of published articles, newest first."""
     query = _published_query(db)
 
+    # Country and category are many-to-many, so joining to filter on them
+    # multiplies the article row once per matching tag. EXISTS asks the same
+    # question without producing those duplicates in the first place.
+    #
+    # The obvious alternative — join, then SELECT DISTINCT — is what this used
+    # to do, and it is wrong on PostgreSQL: DISTINCT requires every ORDER BY
+    # expression to appear in the select list, and the sort key here is a
+    # COALESCE over two columns rather than a plain column. SQLite accepts it,
+    # so the whole test suite passed while /articles returned 500 against the
+    # real database. EXISTS avoids the duplicates and therefore the DISTINCT,
+    # and lets the ordering index still be used.
     if country:
         key = country.strip().lower()
-        query = query.join(ArticleCountry, ArticleCountry.article_id == RawArticle.id).join(
-            Country, Country.id == ArticleCountry.country_id
+        query = query.filter(
+            select(1)
+            .select_from(ArticleCountry)
+            .join(Country, Country.id == ArticleCountry.country_id)
+            .where(ArticleCountry.article_id == RawArticle.id)
+            .where(or_(Country.slug == key, func.lower(Country.iso2) == key))
+            .exists()
         )
-        query = query.filter(or_(Country.slug == key, func.lower(Country.iso2) == key))
 
     if category:
-        query = (
-            query.join(ArticleCategory, ArticleCategory.article_id == RawArticle.id)
+        query = query.filter(
+            select(1)
+            .select_from(ArticleCategory)
             .join(CategoryDef, CategoryDef.id == ArticleCategory.category_id)
-            .filter(CategoryDef.slug == category.strip().lower())
+            .where(ArticleCategory.article_id == RawArticle.id)
+            .where(CategoryDef.slug == category.strip().lower())
+            .exists()
         )
 
     if language:
@@ -140,10 +158,6 @@ def list_articles(
         query = query.filter(
             or_(_SORT_KEY < cur_stamp, (_SORT_KEY == cur_stamp) & (RawArticle.id < cur_id))
         )
-
-    # A filter joining a many-to-many can multiply rows; an article tagged for
-    # two countries must not appear twice on one page.
-    query = query.distinct()
 
     # Fetch one extra to learn whether another page exists without COUNT(*)
     # over the whole table on every request.
