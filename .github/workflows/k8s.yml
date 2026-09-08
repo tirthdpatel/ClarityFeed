@@ -1,0 +1,286 @@
+# Proves the Kubernetes and Docker work actually runs.
+#
+# WHY THIS EXISTS
+#
+# Before this, k8s/ and docker/ were ten manifests and three Dockerfiles that
+# had never been executed anywhere. Manifests in a repository demonstrate that
+# someone can write YAML; they do not demonstrate that the thing runs, and the
+# first question anyone sensible asks is "did you actually run this?".
+#
+# So this builds the real images, stands up a real cluster with kind, applies
+# the real manifests, and asserts on live behaviour: pods reach Ready, the
+# liveness and readiness probes answer correctly, a rolling update keeps
+# serving, and KEDA scales the workers off genuine queue depth.
+#
+# It runs on every push that touches the relevant paths, so the answer stays
+# true rather than being true on the day it was written.
+#
+# This is deliberately NOT a deployment. Production is Vercel + Render +
+# Supabase + Actions, for the cost reasons in docs/kubernetes.md. This is the
+# parallel target, continuously verified.
+
+name: k8s
+
+on:
+  push:
+    paths:
+      - "k8s/**"
+      - "docker/**"
+      - "backend/**"
+      - "config/**"
+      - "requirements*.txt"
+      - ".github/workflows/k8s.yml"
+  pull_request:
+    paths:
+      - "k8s/**"
+      - "docker/**"
+      - ".github/workflows/k8s.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: k8s-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Schema validation. Seconds, not minutes, and it catches the ordinary
+  # mistakes — a mistyped field, an apiVersion that has since been removed —
+  # without waiting for a cluster to come up.
+  # ---------------------------------------------------------------------------
+  manifests:
+    name: validate manifests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kubeconform
+        run: |
+          set -euo pipefail
+          curl -sSL -o kubeconform.tar.gz \
+            https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
+          tar xzf kubeconform.tar.gz kubeconform
+          sudo mv kubeconform /usr/local/bin/
+
+      - name: Install kustomize
+        run: |
+          set -euo pipefail
+          curl -sSL "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Render and validate
+        run: |
+          set -euo pipefail
+          # Rendering through kustomize first means the overlay itself is
+          # validated, not just the individual files it happens to include.
+          kustomize build k8s/ > /tmp/rendered.yaml
+          echo "Rendered $(grep -c '^kind:' /tmp/rendered.yaml) objects."
+
+          # KEDA's ScaledObject is a CRD, so its schema is not in the stock
+          # Kubernetes bundle. Pointing kubeconform at the CRD catalogue means
+          # it is genuinely validated rather than skipped.
+          kubeconform \
+            -strict \
+            -summary \
+            -kubernetes-version 1.31.0 \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            /tmp/rendered.yaml
+
+  # ---------------------------------------------------------------------------
+  # The real thing: a cluster, the real images, live assertions.
+  # ---------------------------------------------------------------------------
+  cluster:
+    name: build, deploy and exercise on kind
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: clarity-ci
+          node_image: kindest/node:v1.31.0
+
+      - name: Build images
+        run: |
+          set -euo pipefail
+          # The build context is the repository root: the images need backend/
+          # and config/, which sit above docker/.
+          # Tagged :latest because that is what k8s/ references, paired with
+          # imagePullPolicy: IfNotPresent so the side-loaded image is used and
+          # nothing is pulled from a registry. Any other tag here would leave
+          # the pods in ImagePullBackOff against an image that does not exist.
+          docker build -f docker/Dockerfile.api    -t clarity-api:latest    .
+          docker build -f docker/Dockerfile.worker -t clarity-worker:latest .
+          docker build -f docker/Dockerfile.collector -t clarity-collector:latest .
+          docker images --format '{{.Repository}}:{{.Tag}}  {{.Size}}' | grep '^clarity-'
+
+      - name: Load images into the cluster
+        run: |
+          set -euo pipefail
+          # kind nodes have their own container runtime and cannot see the
+          # host daemon's images, so they are side-loaded rather than pulled.
+          for img in api worker collector; do
+            kind load docker-image "clarity-$img:latest" --name clarity-ci
+          done
+
+      - name: Install KEDA
+        run: |
+          set -euo pipefail
+          # Installed before the manifests are applied, because ScaledObject is
+          # a custom resource: without the CRD registered, `kubectl apply`
+          # rejects the whole kustomization rather than skipping that object.
+          helm repo add kedacore https://kedacore.github.io/charts
+          helm repo update
+          helm install keda kedacore/keda \
+            --namespace keda --create-namespace --wait --timeout 5m
+          kubectl -n keda get deploy
+
+      - name: Apply manifests
+        run: |
+          set -euo pipefail
+          kubectl apply -k k8s/
+
+          # 02-secret.yaml ships with empty values on purpose so that a real
+          # password is never committed; `make k8s-secrets` fills it from a
+          # gitignored .env. CI has no .env, so it supplies throwaway values
+          # here. These are test credentials for a cluster that is destroyed a
+          # few minutes from now, and reach nothing outside it.
+          kubectl -n clarity create secret generic clarity-secrets \
+            --from-literal=POSTGRES_PASSWORD=ci-not-a-real-password \
+            --from-literal=PGPASSWORD=ci-not-a-real-password \
+            --from-literal=DATABASE_URL=postgresql://clarity@clarity-postgres:5432/clarity \
+            --from-literal=GROQ_API_KEY= \
+            --from-literal=GEMINI_API_KEY= \
+            --from-literal=HF_API_TOKEN= \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          # envFrom is resolved when a container starts, so pods created before
+          # the secret existed are holding the empty values and must be
+          # replaced rather than waited on.
+          kubectl -n clarity delete pod --all --wait=false
+
+      - name: Wait for Postgres
+        run: |
+          set -euo pipefail
+          kubectl -n clarity rollout status statefulset/clarity-postgres --timeout=5m
+          kubectl -n clarity exec statefulset/clarity-postgres -- \
+            pg_isready -U clarity -d clarity
+
+      - name: Wait for the API to become Ready
+        run: |
+          set -euo pipefail
+          # This is the real assertion: Ready means the readiness probe passed,
+          # which means the pod reached Postgres. The API creates its own
+          # schema on startup via init_db_with_retry().
+          kubectl -n clarity rollout status deployment/clarity-api --timeout=5m
+          kubectl -n clarity get pods -o wide
+
+      - name: Probes answer correctly
+        run: |
+          set -euo pipefail
+          kubectl -n clarity port-forward svc/clarity-api 8000:8000 &
+          sleep 5
+
+          echo "--- /health (liveness: must not touch the database) ---"
+          curl -sSf localhost:8000/health | tee /tmp/health.json
+          grep -q '"status":"ok"' /tmp/health.json
+
+          echo "--- /ready (readiness: must reach the database) ---"
+          curl -sSf localhost:8000/ready | tee /tmp/ready.json
+          grep -q '"database":true' /tmp/ready.json
+
+          echo "--- /articles (empty but well-formed on a fresh database) ---"
+          curl -sSf localhost:8000/articles | tee /tmp/articles.json
+          python3 -c "import json;d=json.load(open('/tmp/articles.json'));assert 'articles' in d and 'hasMore' in d, d"
+
+      - name: The Service load balances across replicas
+        run: |
+          set -euo pipefail
+          kubectl -n clarity port-forward svc/clarity-api 8001:8000 &
+          sleep 5
+          # /health reports the pod name via the downward API, so distinct
+          # values prove requests are genuinely reaching different replicas
+          # rather than one pod answering everything.
+          for _ in $(seq 1 30); do
+            curl -sSf localhost:8001/health | python3 -c "import sys,json;print(json.load(sys.stdin)['instance'])"
+          done | sort -u | tee /tmp/instances.txt
+          test "$(wc -l < /tmp/instances.txt)" -ge 2
+
+      - name: A rolling update keeps serving
+        run: |
+          set -euo pipefail
+          kubectl -n clarity port-forward svc/clarity-api 8002:8000 &
+          sleep 5
+
+          # maxUnavailable: 0 is the claim in 20-api.yaml. Restart every pod
+          # while polling, and require that no request fails.
+          ( for _ in $(seq 1 120); do
+              curl -sSf -o /dev/null localhost:8002/health || echo "FAILED" >> /tmp/rollout-errors
+              sleep 0.5
+            done ) &
+          POLLER=$!
+
+          kubectl -n clarity rollout restart deployment/clarity-api
+          kubectl -n clarity rollout status deployment/clarity-api --timeout=5m
+          wait $POLLER || true
+
+          if [ -s /tmp/rollout-errors ]; then
+            echo "Requests failed during the rolling update:"; cat /tmp/rollout-errors; exit 1
+          fi
+          echo "No failed requests during the rolling update."
+
+      - name: KEDA scales workers on queue depth
+        run: |
+          set -euo pipefail
+          echo "--- replicas before ---"
+          kubectl -n clarity get deployment clarity-worker -o jsonpath='{.status.replicas}'; echo
+
+          # A backlog of 100 against targetQueryValue 20 asks for 5 replicas.
+          # The rows are synthetic and never leave this cluster; they exist to
+          # move the number KEDA polls, nothing else.
+          kubectl -n clarity exec statefulset/clarity-postgres -- \
+            psql -U clarity -d clarity -v ON_ERROR_STOP=1 -c "
+              INSERT INTO sources (name, url, feed_url, language, country, category,
+                                   is_active, created_at, updated_at,
+                                   consecutive_failures, editorial_weight)
+              VALUES ('CI Fixture', 'https://ci.invalid', 'https://ci.invalid/rss',
+                      'en', '', 'general', true, now(), now(), 0, 1.0);
+              INSERT INTO raw_articles (source_id, url, url_hash, title, status,
+                                        ingest_status, enrichment_status,
+                                        created_at, updated_at)
+              SELECT (SELECT id FROM sources WHERE name = 'CI Fixture'),
+                     'https://ci.invalid/' || g, md5(g::text),
+                     'CI fixture ' || g, 'PENDING', 'PUBLISHED', 'PENDING',
+                     now(), now()
+              FROM generate_series(1, 100) g;"
+
+          echo "--- waiting for KEDA to scale out (polls every 30s) ---"
+          for i in $(seq 1 20); do
+            replicas=$(kubectl -n clarity get deployment clarity-worker -o jsonpath='{.spec.replicas}')
+            echo "  t+$((i*15))s: spec.replicas=$replicas"
+            if [ "${replicas:-0}" -gt 2 ]; then
+              echo "KEDA scaled the workers from queue depth: $replicas replicas."
+              kubectl -n clarity get hpa,scaledobject
+              exit 0
+            fi
+            sleep 15
+          done
+
+          echo "KEDA did not scale within the window."
+          kubectl -n clarity describe scaledobject clarity-worker || true
+          kubectl -n keda logs deploy/keda-operator --tail=80 || true
+          exit 1
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          kubectl -n clarity get all
+          kubectl -n clarity describe pods
+          kubectl -n clarity logs -l app=clarity-api --tail=100 --prefix || true
+          kubectl -n clarity logs -l app=clarity-worker --tail=100 --prefix || true

@@ -22,9 +22,13 @@
 #   helm repo add kedacore https://kedacore.github.io/charts
 #   helm install keda kedacore/keda --namespace keda --create-namespace
 #
-# Without KEDA installed this manifest applies as an unrecognised resource and
-# does nothing; the workers stay at their Deployment replica count and
-# `kubectl scale` still works by hand.
+# KEDA must be installed BEFORE this is applied. Without the CRD registered,
+# kubectl rejects the kind outright — "no matches for kind ScaledObject" — and
+# `kubectl apply -k k8s/` exits non-zero. The other objects in the
+# kustomization are still created, so the cluster comes up and `kubectl scale`
+# works by hand, but the apply reports failure rather than passing silently.
+# (An earlier version of this comment claimed the manifest was simply inert;
+# the CI in .github/workflows/k8s.yml is what established otherwise.)
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:

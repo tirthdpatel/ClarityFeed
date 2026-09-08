@@ -13,8 +13,8 @@ resources:
   - 21-collector-cronjob.yaml
   - 22-worker.yaml
   - 30-ingress.yaml
-  # Requires KEDA in the cluster. Harmless (and inert) without it — see the
-  # manifest header.
+  # Requires KEDA to be installed first — the apply fails on an unregistered
+  # kind otherwise. See the manifest header.
   - 40-keda-scaledobject.yaml
 
 labels:

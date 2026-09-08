@@ -4,10 +4,12 @@
 #
 # Build context is the repository root — the image needs backend/ and config/.
 #
-# This installs requirements.txt only, NOT requirements-ingest.txt. That split
-# already exists in this repo for a documented reason (torch is ~2 GB and the
-# API never embeds anything); honouring it here is the difference between a
-# ~200 MB image and a ~2.5 GB one.
+# This installs requirements-api.txt: the read API's own dependencies, not the
+# pipeline's. requirements.txt is shared with ingestion and pulls in
+# scikit-learn, numpy, lxml, feedparser and newspaper4k, none of which this
+# process imports — and requirements-ingest.txt adds torch on top of that.
+# The three lists are the difference between a ~120 MB image, a ~400 MB one
+# and a ~2.5 GB one.
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -16,17 +18,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# psycopg2-binary ships wheels, but lxml and newspaper4k build against libxml2
-# on slim. Installed as a single layer and removed in the same one so the build
-# toolchain never reaches the final image.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        build-essential libxml2-dev libxslt1-dev curl \
-    && rm -rf /var/lib/apt/lists/*
+# No build toolchain. Every remaining dependency ships a manylinux wheel —
+# psycopg2-binary included — so the C compiler that the pipeline's lxml and
+# newspaper4k needed is not required here at all. That removes a build step, a
+# purge step, and the risk of the toolchain surviving into the final image.
 
 # Dependencies before source: editing application code reuses this layer.
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt \
-    && apt-get purge -y build-essential && apt-get autoremove -y
+COPY requirements-api.txt .
+RUN pip install --no-cache-dir -r requirements-api.txt
 
 COPY backend/ backend/
 COPY config/ config/
