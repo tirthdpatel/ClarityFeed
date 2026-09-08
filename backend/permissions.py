@@ -102,10 +102,7 @@ def apply_ingest_gate(article: dict[str, Any], perms: Permissions) -> GateResult
         desc = out["description"]
         if len(desc) > perms.max_description_chars:
             # Cut on a word boundary — a hard slice mid-word reads as broken.
-            cut = desc[: perms.max_description_chars]
-            if " " in cut:
-                cut = cut[: cut.rfind(" ")]
-            out["description"] = cut.rstrip() + "…"
+            out["description"] = _truncate(desc, perms.max_description_chars)
             truncated.append("description")
 
     if not perms.can_store_full_text:
@@ -119,6 +116,18 @@ def apply_ingest_gate(article: dict[str, Any], perms: Permissions) -> GateResult
         out["image_url"] = None
 
     return GateResult(fields=out, dropped=dropped, truncated=truncated)
+
+
+def _truncate(text: str, limit: int) -> str:
+    """Cut to `limit` on a word boundary. Shared by both gates so that an
+    excerpt trimmed at ingest and one trimmed at serialize are byte-identical
+    — otherwise tightening a limit visibly reflows text that did not change."""
+    if limit <= 0 or len(text) <= limit:
+        return text
+    cut = text[:limit]
+    if " " in cut:
+        cut = cut[: cut.rfind(" ")]
+    return cut.rstrip() + "…"
 
 
 def apply_serialize_gate(article: dict[str, Any], perms: Permissions) -> dict[str, Any]:
@@ -136,6 +145,20 @@ def apply_serialize_gate(article: dict[str, Any], perms: Permissions) -> dict[st
         out["imageUrl"] = None
     if not perms.can_generate_summary:
         out["summary"] = None
+
+    # Description is re-trimmed here, not just at ingest. `max_description_chars`
+    # can be lowered after an article is stored, and the whole point of a
+    # serialize-side gate is that tightening a permission takes effect on the
+    # next request rather than the next crawl. Without this the stored — longer
+    # — excerpt kept being served, which is exactly the failure the two-boundary
+    # design exists to prevent.
+    if not perms.can_store_description:
+        out["description"] = None
+    elif out.get("description"):
+        out["description"] = _truncate(out["description"], perms.max_description_chars)
+
+    if not perms.can_store_title:
+        out["title"] = ""
 
     if perms.requires_attribution or perms.original_url_required:
         out["attribution"] = {

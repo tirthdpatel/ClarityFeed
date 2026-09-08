@@ -95,6 +95,15 @@ class Settings(BaseSettings):
     # validate_or_die() below.
     APP_ENV: str = "development"
 
+    # ---- Public API rate limiting ----
+    #
+    # Per client IP, per window, enforced in-process. Sized for a reader
+    # browsing normally with room to spare, not for a scraper: a page view
+    # costs a handful of requests, so 60/min is generous for a person and
+    # useless for a loop. See backend/api/middleware.py on the scope limits.
+    RATE_LIMIT_REQUESTS: int = 60
+    RATE_LIMIT_WINDOW_SECONDS: float = 60.0
+
     # ---- API ----
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000

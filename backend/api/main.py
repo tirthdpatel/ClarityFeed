@@ -2,6 +2,7 @@
 ClarityFeed — FastAPI application entry point.
 
 This is the main application module deployed to Render. It:
+ - Serves the public read API (``/articles``) and reference data
  - Seeds default RSS sources on first startup
  - Provides ``GET /health``, ``GET /ready`` and ``GET /sources`` endpoints
  - Configures CORS for the Vercel frontend
@@ -17,6 +18,9 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
+from backend.api.articles import router as articles_router
+from backend.api.middleware import NoIndexMiddleware, RateLimitMiddleware
+from backend.api.reference import router as reference_router
 from backend.collector.feed_sources import FeedSourceRepository
 from backend.database.session import get_db, init_db_with_retry
 from config.settings import settings
@@ -100,6 +104,22 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
     max_age=600,
 )
+
+# Starlette runs middleware in reverse registration order, so these two execute
+# before CORS: a rate-limited request still needs its CORS headers, or the
+# browser reports an opaque network failure instead of the 429 that would tell
+# you what actually happened.
+app.add_middleware(NoIndexMiddleware)
+app.add_middleware(
+    RateLimitMiddleware,
+    rate=settings.RATE_LIMIT_REQUESTS,
+    window=settings.RATE_LIMIT_WINDOW_SECONDS,
+)
+
+# -- Routers ----------------------------------------------------------------
+app.include_router(articles_router)
+app.include_router(reference_router)
+
 
 # -- Public endpoints -------------------------------------------------------
 
