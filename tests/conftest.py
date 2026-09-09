@@ -42,6 +42,17 @@ os.environ.setdefault("HF_API_TOKEN", "test_hf_token")
 os.environ.setdefault("FRONTEND_URL", "http://localhost:3000")
 os.environ.setdefault("APP_ENV", "development")
 
+# The rate limiter keeps its counters in process memory, so every request the
+# suite makes shares one window. At the production setting of 60/minute the
+# tests throttle themselves: whichever test happens to run past the sixtieth
+# request starts getting 429s, which makes failures depend on test ORDER
+# rather than on behaviour — and gets worse with every test added.
+#
+# Raised rather than disabled, so the middleware still runs in the path it
+# would run in production. The limiter's own behaviour is covered directly in
+# tests/unit/test_rate_limit.py, which builds an instance with a small window.
+os.environ.setdefault("RATE_LIMIT_REQUESTS", "1000000")
+
 
 @atexit.register
 def _cleanup() -> None:

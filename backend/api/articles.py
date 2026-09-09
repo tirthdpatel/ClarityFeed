@@ -73,6 +73,29 @@ def _decode_cursor(cursor: str) -> tuple[datetime, int]:
         raise HTTPException(status_code=400, detail="Malformed cursor.") from exc
 
 
+def _csv_param(value: str, field: str, limit: int = 50) -> list[str]:
+    """Split a comma-separated filter value into a clean, bounded list.
+
+    Every list filter goes through here so they behave identically: one value
+    and many values are the same code path, and whitespace and stray commas are
+    tolerated.
+
+    A value that contains no usable entries returns an empty list, and the
+    caller then applies no filter at all. `?country=` and `?country=,,` mean
+    the same thing as omitting the parameter — which is what the pickers emit
+    when a reader deselects everything, and it would be perverse to answer that
+    with an error rather than with the unfiltered feed.
+
+    The cap is not cosmetic: each list becomes an IN clause built from user
+    input, and an unbounded one is a cheap way to make the planner do something
+    expensive.
+    """
+    parts = [p.strip().lower() for p in value.split(",") if p.strip()]
+    if len(parts) > limit:
+        raise HTTPException(status_code=400, detail=f"too many {field} values.")
+    return parts
+
+
 def _interleave_by_source(rows: list[RawArticle]) -> list[RawArticle]:
     """Reorder one page so a single publisher cannot monopolise it.
 
@@ -136,8 +159,12 @@ def _published_query(db: Session):
 def list_articles(
     response: Response,
     db: Session = Depends(get_db),
-    country: str | None = Query(None, description="Country slug or ISO-2 code"),
-    category: str | None = Query(None, description="Category slug"),
+    country: str | None = Query(
+        None, description="Comma-separated country slugs or ISO-2 codes"
+    ),
+    category: str | None = Query(
+        None, description="Comma-separated category slugs; parents match their children"
+    ),
     language: str | None = Query(None, description="Source language code"),
     source: str | None = Query(
         None, description="Comma-separated source ids, e.g. 1,4,7"
@@ -165,15 +192,19 @@ def list_articles(
     # real database. EXISTS avoids the duplicates and therefore the DISTINCT,
     # and lets the ordering index still be used.
     if country:
-        key = country.strip().lower()
-        query = query.filter(
-            select(1)
-            .select_from(ArticleCountry)
-            .join(Country, Country.id == ArticleCountry.country_id)
-            .where(ArticleCountry.article_id == RawArticle.id)
-            .where(or_(Country.slug == key, func.lower(Country.iso2) == key))
-            .exists()
-        )
+        # Several countries widen the feed rather than narrowing it: a reader
+        # picking India and the UK wants both, not the empty set of articles
+        # filed under both at once. Same for topics and publishers below.
+        keys = _csv_param(country, "country")
+        if keys:
+            query = query.filter(
+                select(1)
+                .select_from(ArticleCountry)
+                .join(Country, Country.id == ArticleCountry.country_id)
+                .where(ArticleCountry.article_id == RawArticle.id)
+                .where(or_(Country.slug.in_(keys), func.lower(Country.iso2).in_(keys)))
+                .exists()
+            )
 
     if category:
         # A category matches itself AND everything beneath it.
@@ -186,24 +217,25 @@ def list_articles(
         #
         # Recursive rather than a single parent hop, so a third level added to
         # the taxonomy later does not silently start losing articles.
-        slug = category.strip().lower()
-        roots = (
-            select(CategoryDef.id)
-            .where(CategoryDef.slug == slug)
-            .cte("category_tree", recursive=True)
-        )
-        descendants = select(CategoryDef.id).join(
-            roots, CategoryDef.parent_id == roots.c.id
-        )
-        category_tree = roots.union_all(descendants)
+        slugs = _csv_param(category, "category")
+        if slugs:
+            roots = (
+                select(CategoryDef.id)
+                .where(CategoryDef.slug.in_(slugs))
+                .cte("category_tree", recursive=True)
+            )
+            descendants = select(CategoryDef.id).join(
+                roots, CategoryDef.parent_id == roots.c.id
+            )
+            category_tree = roots.union_all(descendants)
 
-        query = query.filter(
-            select(1)
-            .select_from(ArticleCategory)
-            .where(ArticleCategory.article_id == RawArticle.id)
-            .where(ArticleCategory.category_id.in_(select(category_tree.c.id)))
-            .exists()
-        )
+            query = query.filter(
+                select(1)
+                .select_from(ArticleCategory)
+                .where(ArticleCategory.article_id == RawArticle.id)
+                .where(ArticleCategory.category_id.in_(select(category_tree.c.id)))
+                .exists()
+            )
 
     if language:
         query = query.filter(Source.language == language.strip().lower())
@@ -213,23 +245,15 @@ def list_articles(
         # Single ids still work — "4" is a one-element list — so existing links
         # do not break.
         try:
-            source_ids = [int(part) for part in source.split(",") if part.strip()]
+            source_ids = [int(p) for p in _csv_param(source, "source")]
         except ValueError as exc:
             raise HTTPException(
                 status_code=400,
                 detail="source must be a comma-separated list of numeric ids.",
             ) from exc
 
-        if not source_ids:
-            raise HTTPException(status_code=400, detail="source list was empty.")
-
-        # Cap it. The parameter is user-supplied and goes straight into an IN
-        # clause; without a bound, a long enough list is a cheap way to make the
-        # database plan something expensive.
-        if len(source_ids) > 50:
-            raise HTTPException(status_code=400, detail="too many source ids.")
-
-        query = query.filter(Source.id.in_(source_ids))
+        if source_ids:
+            query = query.filter(Source.id.in_(source_ids))
 
     if date:
         # A whole UTC day, half-open [00:00, next 00:00). Half-open rather than

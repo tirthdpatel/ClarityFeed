@@ -582,3 +582,89 @@ def test_source_list_is_bounded(client):
 def test_source_and_category_compose(client, taxonomy):
     body = client.get("/articles?source=1&category=world").json()
     assert all(a["source"]["id"] == 1 for a in body["articles"])
+
+
+# -- combining filters ------------------------------------------------------
+
+
+def test_multiple_countries_widen_the_feed(client, db_session):
+    """Two countries means either, not both — picking India and the UK asks
+    for news from each, not for articles filed under both at once."""
+    db_session.add_all(
+        [
+            Country(id=10, iso2="IN", iso3="IND", name="India", slug="in", is_enabled=True),
+            Country(id=11, iso2="GB", iso3="GBR", name="United Kingdom", slug="gb", is_enabled=True),
+            Country(id=12, iso2="FR", iso3="FRA", name="France", slug="fr", is_enabled=True),
+        ]
+    )
+    from backend.database.orm_models import ArticleCountry
+
+    db_session.add_all(
+        [
+            ArticleCountry(article_id=1, country_id=10, relevance="primary"),
+            ArticleCountry(article_id=2, country_id=11, relevance="primary"),
+            ArticleCountry(article_id=3, country_id=12, relevance="primary"),
+        ]
+    )
+    db_session.commit()
+
+    ids = {a["id"] for a in client.get("/articles?country=in,gb").json()["articles"]}
+    assert ids == {1, 2}
+
+
+def test_country_accepts_slug_or_iso2_in_a_list(client, db_session):
+    db_session.add(
+        Country(id=13, iso2="JP", iso3="JPN", name="Japan", slug="japan", is_enabled=True)
+    )
+    from backend.database.orm_models import ArticleCountry
+
+    db_session.add(ArticleCountry(article_id=1, country_id=13, relevance="primary"))
+    db_session.commit()
+
+    by_slug = {a["id"] for a in client.get("/articles?country=japan").json()["articles"]}
+    by_iso = {a["id"] for a in client.get("/articles?country=jp").json()["articles"]}
+    assert by_slug == by_iso == {1}
+
+
+def test_multiple_categories_include_all_their_children(client, taxonomy):
+    """world covers conflict+diplomacy, sports covers football."""
+    ids = {a["id"] for a in client.get("/articles?category=world,sports").json()["articles"]}
+    assert ids == {1, 2, 3}
+
+
+def test_country_category_and_source_compose(client, db_session, taxonomy):
+    """All three narrow together: within the chosen countries AND the chosen
+    topics AND the chosen publishers."""
+    db_session.add(
+        Country(id=14, iso2="GB", iso3="GBR", name="United Kingdom", slug="gb", is_enabled=True)
+    )
+    from backend.database.orm_models import ArticleCountry
+
+    db_session.add_all(
+        [
+            ArticleCountry(article_id=1, country_id=14, relevance="primary"),
+            ArticleCountry(article_id=3, country_id=14, relevance="primary"),
+        ]
+    )
+    db_session.commit()
+
+    # article 1: source 1, country gb, category conflict (under world)
+    # article 3: source 2, country gb, category football (under sports)
+    body = client.get("/articles?country=gb&category=world&source=1").json()
+    assert {a["id"] for a in body["articles"]} == {1}
+
+
+def test_empty_filter_value_means_no_filter(client):
+    """`?country=` is what a picker emits when everything is deselected. It
+    means "no filter", not "an error" — and `,,` has to agree, or the two
+    spellings of the same intent behave differently."""
+    unfiltered = len(client.get("/articles?limit=50").json()["articles"])
+    for q in ("country=", "category=,,", "source=,", "country=&category="):
+        body = client.get(f"/articles?{q}&limit=50").json()
+        assert len(body["articles"]) == unfiltered, f"{q} changed the result"
+
+
+def test_country_and_category_lists_are_bounded(client):
+    many = ",".join(f"x{i}" for i in range(200))
+    assert client.get(f"/articles?country={many}").status_code == 400
+    assert client.get(f"/articles?category={many}").status_code == 400

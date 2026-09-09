@@ -1,55 +1,88 @@
 import { DatePicker } from "@/components/DatePicker";
 import { Feed } from "@/components/Feed";
-import { SourcePicker } from "@/components/SourcePicker";
+import { Filters } from "@/components/Filters";
 import { StaleNotice } from "@/components/StaleNotice";
-import { fetchArchive, fetchArticlesSafe, fetchSources } from "@/lib/api";
+import {
+  fetchArchive,
+  fetchArticlesSafe,
+  fetchCategories,
+  fetchCountries,
+  fetchSources,
+} from "@/lib/api";
 
 export default async function HomePage({
   searchParams,
 }: {
   // Promises since Next 15: the framework no longer resolves route inputs
   // before the component runs, so they are awaited like any other async data.
-  searchParams: Promise<{ cursor?: string; date?: string; source?: string }>;
+  searchParams: Promise<{
+    cursor?: string;
+    date?: string;
+    source?: string;
+    country?: string;
+    category?: string;
+  }>;
 }) {
-  const { cursor, date, source } = await searchParams;
-  const [{ page, failed }, archive, sources] = await Promise.all([
-    fetchArticlesSafe({ cursor, date, source }),
-    fetchArchive(),
-    fetchSources(),
-  ]);
+  const { cursor, date, source, country, category } = await searchParams;
 
-  const selectedSources = (source ?? "")
-    .split(",")
-    .map((s) => Number(s))
-    .filter((n) => Number.isFinite(n) && n > 0);
+  const [{ page, failed }, archive, sources, countries, categories] =
+    await Promise.all([
+      fetchArticlesSafe({ cursor, date, source, country, category }),
+      fetchArchive(),
+      fetchSources(),
+      fetchCountries(),
+      fetchCategories(),
+    ]);
+
+  const list = (v?: string) =>
+    (v ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+
+  const selected = {
+    country: list(country),
+    category: list(category),
+    source: list(source),
+  };
 
   // Filters compose, so every link out of this page has to carry the ones
-  // already applied. Dropping `source` when paginating would silently widen
-  // the feed on page two.
+  // already applied. Dropping one when paginating would silently widen the
+  // feed on page two.
   const qs = new URLSearchParams();
   if (date) qs.set("date", date);
   if (source) qs.set("source", source);
+  if (country) qs.set("country", country);
+  if (category) qs.set("category", category);
   const base = qs.toString() ? `/?${qs.toString()}&` : "/?";
+
+  // The date picker has to preserve the other filters too, and vice versa.
+  const withoutDate = new URLSearchParams(qs);
+  withoutDate.delete("date");
+  const datePickerBase = withoutDate.toString()
+    ? `/?${withoutDate.toString()}`
+    : "/";
+
+  // Counts the publishers actually on this page, which changes as filters are
+  // applied — and says "1 publisher", not "1 publishers". A stray plural is
+  // the kind of thing that quietly signals nobody read the page.
+  const shown = new Set(page.articles.map((a) => a.source.name)).size;
+  const subtitle =
+    shown === 0
+      ? "Every headline links to the original."
+      : `Newest first, from ${shown} publisher${shown === 1 ? "" : "s"}. ` +
+        "Every headline links to the original.";
 
   return (
     <>
       <h1 className="page-title">{date ? formatDay(date) : "Latest"}</h1>
-      <p className="page-sub">
-        Newest first, from {new Set(page.articles.map((a) => a.source.name)).size || "several"}{" "}
-        publishers. Every headline links to the original.
-      </p>
+      <p className="page-sub">{subtitle}</p>
 
-      <SourcePicker
+      <Filters
+        countries={countries}
+        categories={categories}
         sources={sources}
-        selected={selectedSources}
-        basePath={date ? `/?date=${date}` : "/"}
+        selected={selected}
       />
 
-      <DatePicker
-        archive={archive}
-        selected={date}
-        basePath={source ? `/?source=${source}` : "/"}
-      />
+      <DatePicker archive={archive} selected={date} basePath={datePickerBase} />
 
       {/* A chosen day is a fixed window, so "the feed may be stale" is
           meaningless there — of course yesterday's page shows yesterday. */}
@@ -61,9 +94,11 @@ export default async function HomePage({
         page={page}
         failed={failed}
         emptyMessage={
-          date
-            ? "Nothing was published on this day. Try another date."
-            : "No stories have been published yet. The feed updates hourly."
+          selected.country.length || selected.category.length || selected.source.length
+            ? "Nothing matches this combination of filters. Try removing one."
+            : date
+              ? "Nothing was published on this day. Try another date."
+              : "No stories have been published yet. The feed updates hourly."
         }
         moreHref={base}
       />
