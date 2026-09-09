@@ -296,6 +296,9 @@ def test_every_response_asserts_noindex(client):
 
 
 def test_reference_endpoints_hide_disabled_rows(client, db_session):
+    """Disabled rows never appear, even when they have articles."""
+    from backend.database.orm_models import ArticleCategory, ArticleCountry
+
     db_session.add_all(
         [
             Country(id=1, iso2="GB", iso3="GBR", name="United Kingdom",
@@ -306,10 +309,77 @@ def test_reference_endpoints_hide_disabled_rows(client, db_session):
             CategoryDef(id=2, slug="hidden", name="Hidden", is_enabled=False),
         ]
     )
+    # Both the enabled and the disabled row have an article, so the only thing
+    # separating them in the result is is_enabled.
+    db_session.add_all(
+        [
+            ArticleCountry(article_id=1, country_id=1, relevance="primary"),
+            ArticleCountry(article_id=2, country_id=2, relevance="primary"),
+            ArticleCategory(article_id=1, category_id=1, is_primary=True),
+            ArticleCategory(article_id=2, category_id=2, is_primary=True),
+        ]
+    )
     db_session.commit()
 
     assert [c["iso2"] for c in client.get("/countries").json()] == ["GB"]
     assert [c["slug"] for c in client.get("/categories").json()] == ["world"]
+
+
+def test_reference_endpoints_hide_empty_rows(client, db_session):
+    """An entry with no articles is omitted rather than listed at zero.
+
+    Retention keeps ten days, so a low-volume country can genuinely have
+    nothing in the window. A nav link to a page that says "nothing here" is
+    worse than no link at all.
+    """
+    from backend.database.orm_models import ArticleCountry
+
+    db_session.add_all(
+        [
+            Country(id=3, iso2="GB", iso3="GBR", name="United Kingdom",
+                    slug="gb", is_enabled=True),
+            Country(id=4, iso2="FR", iso3="FRA", name="France",
+                    slug="fr", is_enabled=True),
+        ]
+    )
+    db_session.add(ArticleCountry(article_id=1, country_id=3, relevance="primary"))
+    db_session.commit()
+
+    listed = client.get("/countries").json()
+    assert [c["iso2"] for c in listed] == ["GB"], "empty country was listed"
+    assert listed[0]["articleCount"] == 1
+
+
+def test_country_count_ignores_unpublished_and_dead_sources(client, db_session):
+    """Counts must agree with the feed, or an entry advertises articles that
+    are not there when you click it."""
+    from backend.database.orm_models import ArticleCountry
+
+    db_session.add(
+        Country(id=5, iso2="GB", iso3="GBR", name="United Kingdom",
+                slug="gb", is_enabled=True)
+    )
+    db_session.add_all(
+        [
+            ArticleCountry(article_id=1, country_id=5, relevance="primary"),  # published
+            ArticleCountry(article_id=4, country_id=5, relevance="primary"),  # CLEANED
+            ArticleCountry(article_id=5, country_id=5, relevance="primary"),  # dead source
+        ]
+    )
+    db_session.commit()
+
+    listed = client.get("/countries").json()
+    assert listed[0]["articleCount"] == 1, listed
+
+
+def test_root_category_count_includes_descendants(client, taxonomy):
+    """The classifier tags leaves, so a root counting only its own tags would
+    report zero for every one of them."""
+    by_slug = {c["slug"]: c for c in client.get("/categories").json()}
+    assert by_slug["world"]["articleCount"] == 2      # conflict + diplomacy
+    assert by_slug["conflict"]["articleCount"] == 1
+    assert by_slug["sports"]["articleCount"] == 1
+
 
 
 # -- category hierarchy -----------------------------------------------------
