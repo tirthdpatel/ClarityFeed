@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ClarityFeed">
+  <!--
+    Tab icon. A silhouette on purpose.
+
+    The source artwork is finely detailed — swirling smoke, close greys on
+    black. At the 16x16 a browser tab actually renders, that detail collapses
+    into a dark smudge and the mark stops being recognisable, which is the one
+    job a favicon has. This keeps the idea (ghost, ringed, dark eyes) and
+    discards everything that only reads at 512px.
+
+    Sized against 16px, not against this file. A first pass had the ghost
+    spanning half the viewBox, which at tab size left an 8px figure adrift in
+    a disc; it now fills most of the circle so the silhouette still carries.
+
+    The body is one arc plus four equal lobes. An earlier version drew each
+    side with its own cubic and the two did not mirror — a visible notch where
+    the right curve met the side. A single A command makes the symmetry
+    structural rather than arithmetic.
+
+    Filled disc rather than transparency, so the mark holds against both light
+    and dark browser chrome.
+  -->
+  <circle cx="32" cy="32" r="31" fill="#14150f"/>
+  <circle cx="32" cy="32" r="29" fill="none" stroke="#6f7a63" stroke-width="2"/>
+
+  <path
+    fill="#f2f1e9"
+    d="M13 51
+       V33
+       A19 19 0 0 1 51 33
+       V51
+       q-4.75 5 -9.5 0
+       q-4.75 5 -9.5 0
+       q-4.75 5 -9.5 0
+       q-4.75 5 -9.5 0
+       Z"/>
+
+  <!-- Large and well separated: at 16px the eyes are the entire face. -->
+  <ellipse cx="24.6" cy="33" rx="3.9" ry="5" fill="#14150f"/>
+  <ellipse cx="39.4" cy="33" rx="3.9" ry="5" fill="#14150f"/>
+</svg>
