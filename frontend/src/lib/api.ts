@@ -88,7 +88,15 @@ export interface CategoryRef {
 const FEED_REVALIDATE = 300;
 const REFERENCE_REVALIDATE = 3600;
 
-class ApiError extends Error {}
+class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
+/** Why a feed request produced nothing. The distinction matters to the reader:
+ *  one resolves itself, the other never will. */
+export type FeedFailure = "unavailable" | "bad-request";
 
 async function get<T>(path: string, revalidate: number): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -96,7 +104,7 @@ async function get<T>(path: string, revalidate: number): Promise<T> {
     headers: { Accept: "application/json" },
   });
   if (!res.ok) {
-    throw new ApiError(`GET ${path} failed: ${res.status}`);
+    throw new ApiError(`GET ${path} failed: ${res.status}`, res.status);
   }
   return (await res.json()) as T;
 }
@@ -126,14 +134,25 @@ export async function fetchArticles(
 }
 
 /** Feed failures are shown as an empty state, not an error page: the most
- *  likely cause is the free tier waking up, and that resolves itself. */
+ *  likely cause is the free tier waking up, and that resolves itself.
+ *
+ *  The failure KIND is reported, though, because the two are not the same
+ *  thing to a reader. A 4xx means the request itself was wrong — a stale or
+ *  hand-edited link, a cursor that no longer parses — and no amount of
+ *  refreshing will fix it. Telling someone "can't reach the news service"
+ *  when the service answered perfectly well, and quickly, sends them to
+ *  check their wifi over a broken URL. */
 export async function fetchArticlesSafe(
   params: Record<string, string | number | undefined> = {},
-): Promise<{ page: ArticlePage; failed: boolean }> {
+): Promise<{ page: ArticlePage; failed: FeedFailure | null }> {
+  const empty: ArticlePage = { articles: [], nextCursor: null, hasMore: false };
   try {
-    return { page: await fetchArticles(params), failed: false };
-  } catch {
-    return { page: { articles: [], nextCursor: null, hasMore: false }, failed: true };
+    return { page: await fetchArticles(params), failed: null };
+  } catch (err) {
+    const status = err instanceof ApiError ? err.status : 0;
+    const kind: FeedFailure =
+      status >= 400 && status < 500 ? "bad-request" : "unavailable";
+    return { page: empty, failed: kind };
   }
 }
 

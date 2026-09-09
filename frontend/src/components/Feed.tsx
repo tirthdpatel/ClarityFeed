@@ -1,4 +1,4 @@
-import type { ArticlePage } from "@/lib/api";
+import type { ArticlePage, FeedFailure } from "@/lib/api";
 import { ArticleCard } from "./ArticleCard";
 
 /**
@@ -18,11 +18,26 @@ export function Feed({
   moreHref,
 }: {
   page: ArticlePage;
-  failed: boolean;
+  failed: FeedFailure | null;
   emptyMessage: string;
   moreHref?: string;
 }) {
-  if (failed) {
+  if (failed === "bad-request") {
+    // The service answered, and said the request was wrong. Refreshing will
+    // not help; starting again from the top will.
+    return (
+      <div className="notice" role="status">
+        <h2 className="notice__title">That link doesn’t work</h2>
+        <p>
+          Part of the address is out of date or mistyped — most likely a
+          pagination link that has since expired.{" "}
+          <a href="/">Start again from the latest stories</a>.
+        </p>
+      </div>
+    );
+  }
+
+  if (failed === "unavailable") {
     return (
       <div className="notice" role="status">
         <h2 className="notice__title">Can’t reach the news service</h2>
