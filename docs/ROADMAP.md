@@ -24,15 +24,28 @@ is actually in the repository and running.
 | 5 — Frontend | **Done.** Next.js on Vercel. Design arbitrated by `.claude/skills/design-council`. |
 | 6 — Legal surface | **Mostly done.** About page carries non-affiliation, non-commercial framing, AI disclosure, takedown route and privacy note. Contact address live. |
 | 7 — Hardening | **Partial.** Security headers and a clean `npm audit` (Next 16) shipped. Alerting, error tracking and uptime monitoring still open. |
-| 8 — Ship | **Frontend live**, unlisted: https://clarityfeed-tirthdpatels-projects.vercel.app — Vercel Authentication disabled so the link works for anyone who has it. Backend not yet deployed. |
+| 8 — Ship | **Live end to end**, unlisted: https://clarityfeed-tirthdpatels-projects.vercel.app — frontend on Vercel, API on Render (Frankfurt, near the eu-central-1 database), ~9,700 articles served. |
 
-**The one blocker:** the API is not deployed, so the site renders its empty
-state. `render.yaml` is ready; it needs a Render service and
-`NEXT_PUBLIC_API_URL` set on the Vercel project.
+**Open, in rough order of cost if ignored:**
 
-**Also open:** the GitHub repo is private, which caps Actions at 2,000
-minutes/month against an hourly ingest schedule. V3 Part H decision 2 assumed
-public. Decide before the cap bites.
+1. **Render does not auto-deploy.** `autoDeploy` is enabled and has never
+   fired; every deploy so far was manual. The backend silently sat six commits
+   behind while Vercel kept deploying itself, which is how a working frontend
+   ended up talking to an API that knew nothing about the filters it was
+   sending. Most likely the GitHub webhook was not installed, because the
+   service was created around the moment the repo flipped public. Until it is
+   fixed, every backend change needs a manual deploy — and the failure mode is
+   silent drift, not an error.
+
+2. **Nothing watches ingestion.** It failed for four hours on 8 Sep and the
+   only symptom was a site that stopped gaining articles. ROADMAP §7.
+
+3. **Retention has not run yet at 10 days.** It will delete everything older
+   than that on its next cycle — a large one-time drop from ~9,700.
+
+4. **Enrichment produces nothing** (`summaries: 0`). Correct rather than
+   broken: restrictive permissions mean no full text is stored, so there is
+   nothing to summarise. It stays that way until a source is reviewed.
 
 ---
 
