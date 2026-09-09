@@ -8,7 +8,12 @@
  * visitor after a quiet spell would wait it out.
  */
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
+// next.config.mjs always supplies this — production falls back to the Render
+// service, development to localhost — so there is no fallback here. A second
+// default in this file would be dead code that still ships its string to the
+// browser, which makes "which URL is this build actually using?" ambiguous to
+// answer by inspecting the bundle.
+const API_BASE = process.env.NEXT_PUBLIC_API_URL!.replace(/\/$/, "");
 
 export interface Attribution {
   required: boolean;
