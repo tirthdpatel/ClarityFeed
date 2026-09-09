@@ -17,6 +17,7 @@ from sqlalchemy.pool import StaticPool
 from backend.collector.gnews_fetcher import (
     DISCOVERED_KIND,
     GNewsFetcher,
+    publisher_identity,
     publisher_slug,
 )
 from backend.database.orm_models import Base, Source
@@ -144,19 +145,67 @@ def test_the_same_publisher_resolves_to_one_row(db) -> None:
     assert db.query(Source).filter(Source.name == "Le Monde").count() == 1
 
 
-def test_an_aggregated_publisher_reuses_its_existing_rss_row(db) -> None:
-    """A publisher we already poll must land on the same row, so it has one
-    permission set and one takedown switch rather than two."""
+@pytest.mark.parametrize(
+    "rss_name,aggregator_name",
+    [
+        # An RSS feed is usually one desk; the aggregator names the masthead.
+        ("The Guardian World", "The Guardian"),
+        ("BBC World News", "BBC"),
+        ("Al Jazeera English", "Al Jazeera"),
+        ("NPR News", "NPR"),
+        ("The Times of India", "Times of India"),
+        ("France 24 English", "France 24"),
+    ],
+)
+def test_an_aggregated_publisher_reuses_its_existing_rss_row(
+    db, rss_name, aggregator_name
+) -> None:
+    """One publisher, one row — therefore one permission set and one takedown
+    switch. Reviewing the Guardian's terms once must not leave half its
+    articles governed by an unreviewed duplicate."""
     existing = Source(
-        name="BBC World News", url="https://bbc.co.uk",
-        feed_url="https://bbc.co.uk/rss.xml", is_active=True, kind="rss",
+        name=rss_name, url="https://example.com",
+        feed_url="https://example.com/rss.xml", is_active=True, kind="rss",
     )
     db.add(existing)
     db.commit()
 
-    resolved = GNewsFetcher().resolve_publisher(db, "BBC World News", "https://bbc.co.uk")
-    assert resolved.id == existing.id
+    resolved = GNewsFetcher().resolve_publisher(db, aggregator_name, "https://example.com")
+    assert resolved.id == existing.id, f"{aggregator_name!r} did not match {rss_name!r}"
     assert resolved.kind == "rss", "the RSS row was converted into a discovered one"
+    assert db.query(Source).count() == 1
+
+
+@pytest.mark.parametrize(
+    "a,b",
+    [
+        ("The Guardian", "Reuters"),
+        ("BBC", "Sky News"),
+        ("The Times of India", "The Times"),
+        ("Le Monde", "Le Figaro"),
+    ],
+)
+def test_different_publishers_are_never_merged(db, a, b) -> None:
+    """Merging two publishers who are not the same one would apply a
+    permission decision to journalism it was never made about — a worse error
+    than carrying a duplicate row, so the matching stays conservative."""
+    db.add(
+        Source(name=a, url="https://a.example", feed_url="https://a.example/rss",
+               is_active=True, kind="rss")
+    )
+    db.commit()
+
+    resolved = GNewsFetcher().resolve_publisher(db, b, "https://b.example")
+    assert resolved.name == b
+    assert db.query(Source).count() == 2
+
+
+def test_identity_survives_reduction_to_nothing() -> None:
+    """A name made only of edition words must not collapse every such source
+    into one row."""
+    assert publisher_identity("World News") == "world-news"
+    assert publisher_identity("The News") == "news"
+    assert publisher_identity("") == "unknown"
 
 
 def test_a_publisher_with_no_name_is_unresolvable(db) -> None:

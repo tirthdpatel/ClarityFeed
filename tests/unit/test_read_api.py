@@ -805,3 +805,46 @@ def test_sources_omits_publishers_with_no_servable_articles(client, db_session):
 def test_sources_are_ordered_by_coverage(client):
     counts = [s["articleCount"] for s in client.get("/sources").json()]
     assert counts == sorted(counts, reverse=True)
+
+
+# -- feed excerpts that arrive as markup ------------------------------------
+
+
+def test_block_boundaries_do_not_weld_sentences_together(client, db_session):
+    """The Guardian opens every item with a standfirst carrying no terminal
+    punctuation, then the body. Flattening the blocks with a space produced
+    "…spar over defence spending Alex Burghart, the deputy Tory leader…" —
+    one sentence that parses wrongly on the first read."""
+    db_session.add(
+        RawArticle(
+            id=600, source_id=1, url="https://p/standfirst", url_hash="sf600",
+            title="Standfirst test",
+            summary_from_feed=(
+                "<p>PM and leader of the opposition spar over defence spending</p>"
+                "<p></p>"
+                "<p><strong>Alex Burghart</strong>, the deputy Tory leader, "
+                "was giving interviews this morning.</p>"
+            ),
+            published_at=datetime(2026, 9, 1, 12, 0, 0), ingest_status="PUBLISHED",
+        )
+    )
+    db_session.commit()
+
+    desc = client.get("/articles/600").json()["description"]
+    assert "spending Alex" not in desc, f"blocks were welded together: {desc!r}"
+    assert "spending — Alex" in desc, desc
+
+
+def test_a_block_that_ends_a_sentence_needs_no_separator(client, db_session):
+    db_session.add(
+        RawArticle(
+            id=601, source_id=1, url="https://p/sentences", url_hash="sf601",
+            title="Sentence test",
+            summary_from_feed="<p>A complete sentence already.</p><p>The next one follows.</p>",
+            published_at=datetime(2026, 9, 1, 12, 0, 0), ingest_status="PUBLISHED",
+        )
+    )
+    db_session.commit()
+
+    desc = client.get("/articles/601").json()["description"]
+    assert desc == "A complete sentence already. The next one follows.", desc

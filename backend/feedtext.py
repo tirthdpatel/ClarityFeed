@@ -37,6 +37,14 @@ _BLOCK = {
 
 _WHITESPACE = re.compile(r"\s+")
 
+#: Emitted where a block element ended, so the join between two blocks can be
+#: chosen after the fact. A control character because it cannot occur in feed
+#: text, so there is nothing to escape and nothing to collide with.
+_BREAK = "\x00"
+
+#: A block that already ends a sentence needs no help joining to the next one.
+_SENTENCE_END = ".!?:;\u2026\u201d\"')]"
+
 
 class _TextExtractor(HTMLParser):
     def __init__(self) -> None:
@@ -48,13 +56,13 @@ class _TextExtractor(HTMLParser):
         if tag in _DROP_CONTENT:
             self._suppress += 1
         elif tag in _BLOCK:
-            self._parts.append(" ")
+            self._parts.append(_BREAK)
 
     def handle_endtag(self, tag: str) -> None:
         if tag in _DROP_CONTENT and self._suppress:
             self._suppress -= 1
         elif tag in _BLOCK:
-            self._parts.append(" ")
+            self._parts.append(_BREAK)
 
     def handle_data(self, data: str) -> None:
         if not self._suppress:
@@ -87,6 +95,7 @@ def strip_html(value: str | None) -> str | None:
         text = re.sub(r"<[^>]*>", " ", value)
 
     text = unescape(text)
+    text = _join_blocks(text)
     text = _WHITESPACE.sub(" ", text).strip()
 
     # Feed summaries often trail into a truncation marker once the markup that
@@ -94,3 +103,39 @@ def strip_html(value: str | None) -> str | None:
     text = re.sub(r"\s*(?:\.\.\.|…)\s*$", "…", text)
 
     return text or None
+
+
+def _join_blocks(text: str) -> str:
+    """Decide what goes between two blocks of prose.
+
+    A space is wrong more often than it looks. The Guardian opens every item
+    with a standfirst — a summary line carrying no terminal punctuation —
+    followed by the body, so flattening `<p>A</p><p>B</p>` to "A B" produced
+    "…spar over defence spending Alex Burghart, the deputy Tory leader…": two
+    sentences welded into one that parses wrongly on the first read.
+
+    An em dash rather than a full stop. A full stop would be inventing
+    punctuation inside a publisher's words and claiming they wrote a sentence
+    that ended there; a dash is visibly our join, and reads as one.
+
+    Blocks that already end in sentence punctuation need nothing, and empty
+    blocks — `<p></p>` is in every Guardian item — contribute no break at all.
+    """
+    out: list[str] = []
+
+    for chunk in text.split(_BREAK):
+        stripped = chunk.strip()
+        if not stripped:
+            # An empty block — `<p></p>` appears in every Guardian item — is a
+            # spacer in the markup, not a boundary in the prose. It contributes
+            # nothing, which also stops runs of them producing runs of dashes.
+            continue
+
+        if out:
+            previous = out[-1].rstrip()
+            already_ended = bool(previous) and previous[-1] in _SENTENCE_END
+            out.append(" " if already_ended else " \u2014 ")
+
+        out.append(stripped)
+
+    return "".join(out)

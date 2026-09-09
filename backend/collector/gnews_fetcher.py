@@ -49,10 +49,57 @@ GNEWS_KIND = "gnews"
 
 _SLUG = re.compile(r"[^a-z0-9]+")
 
+#: Words that describe the *edition* rather than the publisher. An RSS feed is
+#: usually one desk of a paper — "The Guardian World", "BBC World News" — while
+#: an aggregator names the masthead, "The Guardian", "BBC". Matching on the
+#: masthead alone would merge unrelated publishers; matching exactly leaves the
+#: same paper holding two permission rows and two takedown switches, so a
+#: review done once only half applies. Stripping these lets the two meet.
+_EDITION_WORDS = frozenset(
+    {
+        "world", "news", "international", "global", "online", "english",
+        "edition", "uk", "us", "usa", "digital", "live", "latest", "headlines",
+    }
+)
+
+#: Leading articles carry no identity: "The Guardian" and "Guardian" are one
+#: publisher.
+_LEADING_ARTICLES = ("the ", "a ", "an ")
+
 
 def publisher_slug(name: str) -> str:
     """Stable identifier for a publisher name, used to build its feed_url."""
     return _SLUG.sub("-", (name or "").strip().lower()).strip("-") or "unknown"
+
+
+def publisher_identity(name: str) -> str:
+    """Reduce a publisher name to what identifies the publisher.
+
+    "The Guardian World" and "The Guardian" both become "guardian"; "BBC World
+    News" and "BBC" both become "bbc". The point is that a paper polled by RSS
+    and the same paper arriving through an aggregator land on ONE source row,
+    and therefore one permission row and one takedown switch — reviewing the
+    Guardian's terms once should not leave half its articles governed by an
+    unreviewed duplicate.
+
+    Deliberately conservative. It strips leading articles and words that name
+    an edition rather than a masthead, and nothing else — no fuzzy matching, no
+    edit distance. Merging two publishers who are not the same one would apply
+    a permission decision to journalism it was never made about, which is a
+    worse error than carrying a duplicate row.
+
+    Reducing to nothing means the name was only edition words, so the original
+    is kept rather than collapsing every such source together.
+    """
+    lowered = (name or "").strip().lower()
+    for article in _LEADING_ARTICLES:
+        if lowered.startswith(article):
+            lowered = lowered[len(article) :]
+            break
+
+    words = [w for w in _SLUG.sub(" ", lowered).split() if w]
+    kept = [w for w in words if w not in _EDITION_WORDS]
+    return "-".join(kept or words) or "unknown"
 
 
 class GNewsFetcher:
@@ -81,17 +128,17 @@ class GNewsFetcher:
         if existing is not None:
             return existing
 
-        # Also match a publisher we already poll by RSS, so the New York Times
-        # arriving via the aggregator lands on the same row — and therefore the
-        # same permissions and the same takedown switch — as its own feed.
-        by_name = (
-            db.query(Source)
-            .filter(Source.name == name)
-            .filter(Source.kind != DISCOVERED_KIND)
-            .first()
-        )
-        if by_name is not None:
-            return by_name
+        # Match a publisher we already know, comparing identities rather than
+        # exact names: an RSS feed is usually one desk ("The Guardian World")
+        # while the aggregator names the masthead ("The Guardian"). Without
+        # this the same paper ends up with two rows, two permission sets and
+        # two takedown switches.
+        identity = publisher_identity(name)
+        for candidate in db.query(Source).all():
+            if publisher_identity(candidate.name) == identity:
+                if candidate.kind == DISCOVERED_KIND and candidate.name != name:
+                    continue
+                return candidate
 
         source = Source(
             name=name,
