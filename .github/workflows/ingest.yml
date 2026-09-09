@@ -125,6 +125,24 @@ jobs:
       - name: Install dependencies
         run: .github/scripts/ci-install.sh
 
+      # Code and schema must move together. This workflow is the deploy
+      # mechanism for the ingestion path — it runs whatever is on main — but
+      # nothing here applied migrations, so a commit that added a column went
+      # live against a database that did not have it.
+      #
+      # That is not hypothetical: 005_takedown_column shipped on 2026-09-08 and
+      # four consecutive hourly runs then died with
+      # "column sources.takedown_requested_at does not exist", silently, while
+      # the workflow itself reported having run.
+      #
+      # alembic upgrade head is a no-op when the database is already current,
+      # so this costs a second on every run and prevents the whole class.
+      - name: Apply migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          APP_ENV: production
+        run: alembic upgrade head
+
       - name: Run ingestion
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
