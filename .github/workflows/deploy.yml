@@ -1,0 +1,96 @@
+# Deploy the API to Render after the tests pass.
+#
+# WHY THIS EXISTS
+#
+# Render's own auto-deploy has never fired for this repository. Its GitHub App
+# has access to the account's other repo — LinkSpan deploys show
+# trigger: "new_commit" — and none to this one, which was created later and
+# while it was still private. Every ClarityFeed deploy so far was manual, and
+# the failure mode is silence: Vercel keeps shipping the frontend while the API
+# sits still. That is how a filter UI ended up talking to an API that did not
+# understand its requests, with nothing anywhere reporting an error.
+#
+# WHY NOT JUST FIX THE PERMISSION
+#
+# Do that too — Render dashboard, or GitHub > Settings > Applications > Render
+# > grant this repository. But raw auto-deploy ships whatever was pushed,
+# passing or not. This waits for the test suite, so a red commit cannot reach
+# production, and it removes the silent-drift failure at the same time.
+#
+# SETUP: one secret, RENDER_DEPLOY_HOOK_URL.
+#   Render dashboard -> clarityfeed-api -> Settings -> Deploy Hook -> copy URL
+#   GitHub -> Settings -> Secrets and variables -> Actions -> New secret
+#
+# Without it this workflow reports what to do and exits successfully rather
+# than failing every push with a setup error.
+
+name: deploy
+
+on:
+  workflow_run:
+    workflows: ["tests"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-api
+  # Never cancel a deploy in flight; the newest push wins by queueing behind it
+  # rather than by killing a half-finished rollout.
+  cancel-in-progress: false
+
+jobs:
+  render:
+    name: deploy api
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Only on green. A workflow_dispatch has no originating run, so it is
+    # allowed through on the assumption the operator meant it.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Trigger the Render deploy
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          set -uo pipefail
+
+          if [ -z "${HOOK:-}" ]; then
+            echo "::warning::RENDER_DEPLOY_HOOK_URL is not set — the API was NOT deployed."
+            echo ""
+            echo "The tests passed but nothing shipped. To wire this up:"
+            echo "  1. Render dashboard -> clarityfeed-api -> Settings -> Deploy Hook"
+            echo "  2. GitHub -> Settings -> Secrets and variables -> Actions"
+            echo "  3. Add RENDER_DEPLOY_HOOK_URL with that URL"
+            echo ""
+            echo "Exiting 0: an unconfigured deploy should not report the commit"
+            echo "as broken, but it must not look like it succeeded either."
+            exit 0
+          fi
+
+          # -f so a 4xx/5xx is a failed step. A deploy hook that silently
+          # returns 401 is the same class of bug this workflow exists to fix.
+          code=$(curl -sS -X POST -o /tmp/hook.out -w "%{http_code}" "$HOOK") || {
+            echo "::error::Could not reach the Render deploy hook."
+            exit 1
+          }
+
+          echo "Render responded HTTP $code"
+          cat /tmp/hook.out || true
+
+          case "$code" in
+            2*) echo "Deploy queued." ;;
+            *)  echo "::error::Render rejected the deploy hook (HTTP $code)."; exit 1 ;;
+          esac
+
+      - name: What just happened
+        if: always()
+        run: |
+          echo "Commit: ${{ github.event.workflow_run.head_sha || github.sha }}"
+          echo "The build itself runs on Render; this only asks it to start."
+          echo "Follow it at https://dashboard.render.com/web/srv-dag53svqj5pc73911flg"
