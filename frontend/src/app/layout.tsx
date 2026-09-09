@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { MobileNav } from "@/components/MobileNav";
 import { fetchCategories, fetchCountries } from "@/lib/api";
 import "./globals.css";
 
@@ -54,7 +55,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </p>
           </div>
 
-          <nav className="shell nav" aria-label="Sections">
+          {/* Narrow screens get two selects instead of the rails below; the
+              swap is CSS-only, so both are present on first paint. */}
+          <div className="shell">
+            <MobileNav countries={countries} categories={categories} />
+          </div>
+
+          <nav className="shell nav nav-rail" aria-label="Sections">
             {NAV.map((item) => (
               <a className="nav__link" key={item.href} href={item.href}>
                 {item.label}
@@ -68,7 +75,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </nav>
 
           {countries.length > 0 ? (
-            <nav className="shell nav" aria-label="Countries">
+            <nav className="shell nav nav-rail" aria-label="Countries">
               {countries.slice(0, 14).map((c) => (
                 <a className="nav__link" key={c.slug} href={`/country/${c.slug}`}>
                   {c.name}
@@ -94,6 +101,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               articles stay on the publisher’s own site.{" "}
               <a href="/about">How this works, and how to request removal</a>.
             </p>
+            {/* Rendered, not hardcoded. A frozen year is a small thing that
+                makes a site look abandoned. */}
+            <p>© {new Date().getFullYear()} ClarityFeed</p>
           </div>
         </footer>
       </body>

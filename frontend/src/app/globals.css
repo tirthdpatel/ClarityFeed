@@ -626,3 +626,56 @@ a, button, .nav__link, .tag, .more {
   cursor: pointer;
 }
 .srcpick__clear:hover { border-color: var(--fg-faint); color: var(--fg); }
+
+/* -- mobile navigation ----------------------------------------------------- */
+
+/*
+ * Two navigations, one shown at a time, chosen by CSS rather than by
+ * JavaScript measuring the viewport. Both are in the server-rendered HTML, so
+ * the correct one is present on first paint with no flash and no layout shift.
+ *
+ * The link rails are the better experience where there is room: every
+ * destination visible at a glance, one tap away. On a phone they wrapped to
+ * four or five rows and pushed the first headline off the screen, so below
+ * 640px they are replaced by two selects that cost one row.
+ */
+.mobilenav { display: none; }
+
+@media (max-width: 640px) {
+  .nav-rail { display: none; }
+
+  .mobilenav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+    padding-block: 0.7rem;
+    border-top: 1px solid var(--border);
+  }
+  .mobilenav__field {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+    flex: 1 1 9rem;
+  }
+  .mobilenav__label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+    flex: 0 0 auto;
+  }
+  .mobilenav__select {
+    flex: 1 1 auto;
+    min-width: 0;             /* lets a long option name shrink instead of
+                                 forcing the row wider than the viewport */
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 0.35rem 0.4rem;
+    color: var(--fg);
+    background: var(--bg-raised);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+  }
+}
