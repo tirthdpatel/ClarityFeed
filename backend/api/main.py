@@ -4,7 +4,7 @@ ClarityFeed — FastAPI application entry point.
 This is the main application module deployed to Render. It:
  - Serves the public read API (``/articles``) and reference data
  - Seeds default RSS sources on first startup
- - Provides ``GET /health``, ``GET /ready`` and ``GET /sources`` endpoints
+ - Provides ``GET /health`` and ``GET /ready`` probes
  - Configures CORS for the Vercel frontend
 """
 from __future__ import annotations
@@ -21,7 +21,6 @@ from sqlalchemy.orm import Session
 from backend.api.articles import router as articles_router
 from backend.api.middleware import NoIndexMiddleware, RateLimitMiddleware
 from backend.api.reference import router as reference_router
-from backend.collector.feed_sources import FeedSourceRepository
 from backend.database.session import get_db, init_db_with_retry
 from config.settings import settings
 
@@ -214,23 +213,3 @@ def pipeline_stats(db: Session = Depends(get_db)) -> dict:
         "published": by_ingest.get("PUBLISHED", 0),
         "instance": os.getenv("POD_NAME", "local"),
     }
-
-
-@app.get("/sources")
-def list_sources(db: Session = Depends(get_db)) -> list[dict]:
-    """Return all active RSS sources."""
-    repo = FeedSourceRepository(db)
-    sources = repo.get_active_sources()
-    return [
-        {
-            "id": s.id,
-            "name": s.name,
-            "url": s.url,
-            "feed_url": s.feed_url,
-            "language": s.language,
-            "country": s.country,
-            "category": s.category,
-            "is_active": s.is_active,
-        }
-        for s in sources
-    ]

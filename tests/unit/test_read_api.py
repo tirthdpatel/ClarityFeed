@@ -66,7 +66,9 @@ def db_session():
                    feed_url="https://pub.example/rss", language="en", is_active=True),
             Source(id=2, name="Other Wire", url="https://two.example",
                    feed_url="https://two.example/rss", language="fr", is_active=True),
-            Source(id=3, name="Dead Wire", url="https://three.example",
+            # Disabled feed: still polled never, still readable. See
+            # test_a_disabled_feed_does_not_retract_its_articles.
+            Source(id=3, name="Unpolled Wire", url="https://three.example",
                    feed_url="https://three.example/rss", language="en", is_active=False),
         ]
     )
@@ -89,7 +91,7 @@ def db_session():
                        ingest_status="CLEANED"),
             # Published, but its source was deactivated (e.g. a takedown).
             RawArticle(id=5, source_id=3, url="https://three.example/e", url_hash="h5",
-                       title="From a disabled source", published_at=now,
+                       title="From an unpolled source", published_at=now,
                        ingest_status="PUBLISHED"),
         ]
     )
@@ -113,8 +115,11 @@ def client(db_session):
 
 
 def test_only_published_articles_are_listed(client):
+    """Article 4 is CLEANED and must not appear. Article 5 belongs to a
+    disabled feed and must: the barrier decides visibility, is_active only
+    decides polling."""
     ids = {a["id"] for a in client.get("/articles").json()["articles"]}
-    assert ids == {1, 2, 3}, "the barrier or the is_active filter leaked a row"
+    assert ids == {1, 2, 3, 5}, "the publish barrier leaked, or a disabled feed was retracted"
 
 
 def test_unpublished_article_is_404_not_403(client):
@@ -123,8 +128,12 @@ def test_unpublished_article_is_404_not_403(client):
     assert client.get("/articles/4").status_code == 404
 
 
-def test_inactive_source_article_is_hidden(client):
-    assert client.get("/articles/5").status_code == 404
+def test_a_disabled_feed_does_not_retract_its_articles(client):
+    """is_active means "stop polling this feed", not "unpublish everything it
+    ever gave us". The circuit breaker disables sources automatically, and a
+    transport failure is not a reason to withdraw journalism already collected
+    and shown. Only a takedown does that."""
+    assert client.get("/articles/5").status_code == 200
 
 
 def test_takedown_hides_articles_immediately(client, db_session):
@@ -138,7 +147,7 @@ def test_takedown_hides_articles_immediately(client, db_session):
 
     assert client.get("/articles/1").status_code == 404
     ids = {a["id"] for a in client.get("/articles").json()["articles"]}
-    assert ids == {3}, "a taken-down publisher was still being served"
+    assert ids == {3, 5}, "a taken-down publisher was still being served"
 
 
 def test_takedown_stops_us_fetching_the_feed(db_session):
@@ -227,7 +236,11 @@ def test_cursor_pagination_walks_every_article_once(client):
         if not cursor:
             break
 
-    assert seen == [1, 2, 3], "pagination skipped or repeated a row"
+    # Articles 1 and 5 share a published_at, and the sort key breaks ties on
+    # id DESC — which is why the tiebreak is in the cursor at all. Without it
+    # two rows with equal timestamps could swap between requests and paginate
+    # incorrectly.
+    assert seen == [5, 1, 2, 3], "pagination skipped or repeated a row"
 
 
 def test_last_page_reports_no_more(client):
@@ -363,11 +376,12 @@ def test_country_count_ignores_unpublished_and_dead_sources(client, db_session):
         [
             ArticleCountry(article_id=1, country_id=5, relevance="primary"),  # published
             ArticleCountry(article_id=4, country_id=5, relevance="primary"),  # CLEANED
-            ArticleCountry(article_id=5, country_id=5, relevance="primary"),  # dead source
         ]
     )
     db_session.commit()
 
+    # Article 4 is mid-pipeline, so the count must ignore it: a nav entry that
+    # advertises articles the feed will not serve is worse than no entry.
     listed = client.get("/countries").json()
     assert listed[0]["articleCount"] == 1, listed
 
@@ -738,3 +752,56 @@ def test_country_and_category_lists_are_bounded(client):
     many = ",".join(f"x{i}" for i in range(200))
     assert client.get(f"/articles?country={many}").status_code == 400
     assert client.get(f"/articles?category={many}").status_code == 400
+
+
+# -- publisher list ---------------------------------------------------------
+
+
+def test_sources_lists_publishers_with_articles_not_active_feeds(client, db_session):
+    """A publisher discovered through an aggregator has is_active=False —
+    there is no feed to poll — but its articles are in the feed, so it must
+    appear in the control that filters by publisher."""
+    from backend.database.orm_models import Source
+
+    discovered = Source(
+        id=90, name="Reuters", url="https://reuters.com",
+        feed_url="gnews://reuters", is_active=False, kind="discovered",
+    )
+    db_session.add(discovered)
+    db_session.add(
+        RawArticle(
+            id=900, source_id=90, url="https://reuters.com/a", url_hash="r900",
+            title="From an aggregator", published_at=datetime(2026, 9, 1, 12, 0, 0),
+            ingest_status="PUBLISHED",
+        )
+    )
+    db_session.commit()
+
+    listed = {s["name"]: s for s in client.get("/sources").json()}
+    assert "Reuters" in listed, "discovered publisher missing from the filter"
+    assert listed["Reuters"]["articleCount"] == 1
+
+
+def test_sources_omits_publishers_with_no_servable_articles(client, db_session):
+    """A publisher whose only article is still mid-pipeline is not listed."""
+    from backend.database.orm_models import Source
+
+    db_session.add(
+        Source(id=91, name="Silent Wire", url="https://silent.example",
+               feed_url="https://silent.example/rss", is_active=True, kind="rss")
+    )
+    db_session.add(
+        RawArticle(id=910, source_id=91, url="https://silent.example/a",
+                   url_hash="s910", title="Not yet published",
+                   published_at=datetime(2026, 9, 1, 12, 0, 0),
+                   ingest_status="CLEANED")
+    )
+    db_session.commit()
+
+    names = {s["name"] for s in client.get("/sources").json()}
+    assert "Silent Wire" not in names
+
+
+def test_sources_are_ordered_by_coverage(client):
+    counts = [s["articleCount"] for s in client.get("/sources").json()]
+    assert counts == sorted(counts, reverse=True)

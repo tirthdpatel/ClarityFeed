@@ -49,7 +49,9 @@ def _servable_article_ids():
         select(RawArticle.id)
         .join(Source, Source.id == RawArticle.source_id)
         .where(RawArticle.ingest_status == "PUBLISHED")
-        .where(Source.is_active.is_(True))
+        # Not is_active — see the note in backend/api/articles.py. Counts must
+        # agree with what the feed serves, so this predicate has to match it
+        # exactly or a publisher appears in the filter with the wrong number.
         .where(Source.takedown_requested_at.is_(None))
     )
 
@@ -182,3 +184,50 @@ def archive_window(response: Response) -> dict[str, Any]:
         "earliest": (today - timedelta(days=ARTICLE_DAYS)).isoformat(),
         "latest": today.isoformat(),
     }
+
+
+@router.get("/sources")
+def list_sources(response: Response, db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    """Publishers that currently have articles, most-covered first.
+
+    This populates the publisher filter, so the question it answers is "whose
+    journalism is in this feed?" — not "which feeds do we poll?", which is what
+    it used to answer via get_active_sources().
+
+    The difference matters since the GNews adapter landed. A publisher
+    discovered through an aggregator has `is_active = False`, because there is
+    no feed to poll; it exists to own an attribution and a permission row. The
+    old query filtered those out, so Reuters could have articles in the feed
+    and be absent from the control that filters by publisher.
+
+    Counted over servable articles only, for the same reason as the other
+    reference endpoints: an entry that advertises articles the feed will not
+    serve is worse than no entry.
+    """
+    counts = dict(
+        db.execute(
+            select(RawArticle.source_id, func.count(RawArticle.id))
+            .where(RawArticle.id.in_(_servable_article_ids()))
+            .group_by(RawArticle.source_id)
+        ).all()
+    )
+    if not counts:
+        response.headers["Cache-Control"] = CACHE_CONTROL
+        return []
+
+    rows = db.query(Source).filter(Source.id.in_(counts)).all()
+    response.headers["Cache-Control"] = CACHE_CONTROL
+    return sorted(
+        (
+            {
+                "id": s.id,
+                "name": s.name,
+                "url": s.url,
+                "language": s.language,
+                "kind": s.kind,
+                "articleCount": counts.get(s.id, 0),
+            }
+            for s in rows
+        ),
+        key=lambda s: (-s["articleCount"], s["name"]),
+    )

@@ -147,10 +147,22 @@ def _published_query(db: Session):
         db.query(RawArticle)
         .join(Source, Source.id == RawArticle.source_id)
         .filter(RawArticle.ingest_status == "PUBLISHED")
-        .filter(Source.is_active.is_(True))
-        # A takedown must take effect on the next request, not on the next
-        # purge. Setting the column is the whole remedy; deleting the rows is
-        # cleanup that can follow at leisure.
+        # Deliberately NOT filtered on `is_active`.
+        #
+        # is_active answers "should the collector poll this feed?", which is a
+        # different question from "may a reader see these articles?". Conflating
+        # them had two consequences. A feed auto-disabled by the circuit breaker
+        # would silently retract every article it had ever contributed, which is
+        # a content decision taken for an operational reason. And a publisher
+        # discovered through an aggregator is is_active=False by design — there
+        # is no feed to poll — so its articles were collected, stored, and never
+        # shown to anyone.
+        #
+        # Takedown is the flag that means "do not show this", and it is the one
+        # checked here.
+        # A takedown takes effect on the next request, not on the next purge.
+        # Setting the column is the whole remedy; deleting rows is cleanup that
+        # can follow at leisure.
         .filter(Source.takedown_requested_at.is_(None))
     )
 

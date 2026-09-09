@@ -222,6 +222,8 @@ class PipelineRunner:
     ) -> None:
         self.config = config or PipelineConfig()
         self._rss = rss_reader
+        self._gnews = None
+        self._publisher_cache: dict[str, Any] = {}
         self._bodies = body_reader
         self._embedder = embedder
         self._summarizer = summarizer
@@ -487,6 +489,39 @@ class PipelineRunner:
             ]
         return rows
 
+    def _reader_for(self, source: Any) -> Any:
+        """Pick the collector for a source's kind.
+
+        An injected rss_reader still wins for every kind, so existing test
+        doubles keep working and a test never reaches the network.
+        """
+        if self._rss is not None:
+            return self._rss
+        if (getattr(source, "kind", "rss") or "rss") == "gnews":
+            from backend.collector.gnews_fetcher import GNewsFetcher
+
+            if self._gnews is None:
+                self._gnews = GNewsFetcher()
+            return self._gnews
+        return self.rss
+
+    def _resolve_publisher(self, db: Session, name: str, url: str | None) -> Any:
+        """Find or create the source row for a publisher named by an entry.
+
+        Delegates to GNewsFetcher, which owns the discovered-publisher rules,
+        and caches within the run so a hundred articles from one publisher do
+        not become a hundred lookups.
+        """
+        cache = self._publisher_cache
+        if name in cache:
+            return cache[name]
+
+        from backend.collector.gnews_fetcher import GNewsFetcher
+
+        resolved = GNewsFetcher().resolve_publisher(db, name, url)
+        cache[name] = resolved
+        return resolved
+
     def _read_feed(self, source: Any) -> tuple[list[dict], dict]:
         """One feed read, returning entries plus transport metadata.
 
@@ -496,7 +531,7 @@ class PipelineRunner:
         200 with an empty body. Falls back to the plain call so injected
         test doubles stay simple.
         """
-        reader = self.rss
+        reader = self._reader_for(source)
         detailed = getattr(reader, "fetch_feed_detailed", None)
         if detailed is not None:
             return self._await(detailed(source))
@@ -611,12 +646,38 @@ class PipelineRunner:
         collisions = 0
 
         for source, entries in harvest:
-            perms = perms_by_source.get(source.id, Permissions.restrictive())
             for entry in entries:
                 url = (entry.get("url") or "").strip()
                 if not url:
                     continue
-                if not validate_attribution({**entry, "source_name": entry.get("source_name") or source.name}):
+
+                # An aggregator returns articles from many publishers under one
+                # source row. Each is filed under the publisher that actually
+                # wrote it, so attribution names them and — more importantly —
+                # the permission gate consults THEIR row rather than the
+                # aggregator's. Without this, one unreviewed row would silently
+                # license the whole of GNews.
+                owner = source
+                if entry.get("publisher_name"):
+                    resolved = self._resolve_publisher(
+                        db, entry["publisher_name"], entry.get("publisher_url")
+                    )
+                    if resolved is None:
+                        logger.warning("Dropping unattributable aggregator article: %s", url)
+                        continue
+                    owner = resolved
+
+                perms = perms_by_source.get(owner.id)
+                if perms is None:
+                    # A publisher discovered mid-run has no entry in the batch
+                    # lookup. Fetch it rather than defaulting silently: the
+                    # default is restrictive either way, but a real row may say
+                    # otherwise and skipping the read would ignore it.
+                    perms = self._permissions_for(db, {owner.id}).get(
+                        owner.id, Permissions.restrictive()
+                    )
+                    perms_by_source[owner.id] = perms
+                if not validate_attribution({**entry, "source_name": entry.get("source_name") or owner.name}):
                     logger.warning("Dropping unattributed article: %s", url)
                     continue
 
@@ -648,7 +709,11 @@ class PipelineRunner:
                 candidates.setdefault(
                     h,
                     {
-                        "source_id": source.id,
+                        # owner, not source: for an aggregator these differ,
+                        # and the article belongs to the publisher that wrote
+                        # it. Getting this wrong would credit the aggregator
+                        # and point the permission gate at the wrong row.
+                        "source_id": owner.id,
                         "url": url,
                         "url_hash": h,
                         "title": title[:1024],

@@ -95,6 +95,24 @@ class Settings(BaseSettings):
     # validate_or_die() below.
     APP_ENV: str = "development"
 
+    # ---- GNews (gnews.io) ----
+    #
+    # Free tier: 100 requests/day, 10 articles per query, and articles are
+    # held back 12 hours. It supplements the RSS feeds rather than replacing
+    # them — those arrive in minutes and have no quota.
+    #
+    # Their free plan is non-commercial only, which this project is. NewsAPI's
+    # free plan was considered and rejected: it forbids use in a staging or
+    # production environment outright, and running it here would be the one
+    # place the project knowingly broke an agreement it made.
+    GNEWS_API_KEY: str = ""
+    GNEWS_BASE_URL: str = "https://gnews.io/api/v4"
+    # Well under the 100/day ceiling. The pipeline runs hourly, so a budget
+    # this size cannot exhaust the quota even if every run spends it.
+    GNEWS_DAILY_REQUEST_BUDGET: int = 40
+    GNEWS_MAX_ARTICLES: int = 10
+    GNEWS_TIMEOUT_SECONDS: float = 15.0
+
     # ---- Public API rate limiting ----
     #
     # Per client IP, per window, enforced in-process. Sized for a reader

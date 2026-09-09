@@ -92,6 +92,11 @@ class Source(Base):
     # feed recovers, and a source removed at its publisher's request must not.
     # One boolean cannot hold both meanings, and the failure mode is somebody
     # tidying up a list of inactive feeds six months later.
+    # Migration 006. 'rss' polls feed_url; 'gnews' calls an aggregator API;
+    # 'discovered' is a publisher found through an aggregator, which exists to
+    # own an attribution and a permission row and is never polled.
+    kind = Column(String(20), nullable=False, default="rss", server_default="rss")
+
     takedown_requested_at = Column(DateTime, nullable=True, index=True)
     takedown_requested_by = Column(String(255), nullable=True)
     takedown_note = Column(Text, nullable=True)
