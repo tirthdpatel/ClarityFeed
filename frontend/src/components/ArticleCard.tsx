@@ -49,12 +49,12 @@ export function ArticleCard({ article }: { article: Article }) {
                a bare two-letter pair instead, so the "decorative" version of
                this is broken text for a large share of readers. Decided on
                correctness, not taste (design-council tie-break 3). */
-            <a className="tag" key={c.slug} href={`/country/${c.slug}`}>
+            <a className="tag" key={c.slug} href={`/?country=${c.slug}`}>
               {c.name}
             </a>
           ))}
           {article.categories.slice(0, 3).map((c) => (
-            <a className="tag" key={c.slug} href={`/category/${c.slug}`}>
+            <a className="tag" key={c.slug} href={`/?category=${c.slug}`}>
               {c.name}
             </a>
           ))}

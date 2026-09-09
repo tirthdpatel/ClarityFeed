@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import type { CategoryRef, CountryRef } from "@/lib/api";
 
 /**
@@ -28,16 +28,14 @@ export function MobileNav({
   categories: CategoryRef[];
 }) {
   const router = useRouter();
-  const pathname = usePathname();
 
   // Derive the current selection from the URL so the control reflects where
   // you actually are, rather than resetting to "All" on every navigation.
-  const countrySlug = pathname.startsWith("/country/")
-    ? decodeURIComponent(pathname.slice("/country/".length))
-    : "";
-  const categorySlug = pathname.startsWith("/category/")
-    ? decodeURIComponent(pathname.slice("/category/".length))
-    : "";
+  // Selection now lives in the query string, which a client component cannot
+  // read from `pathname`. The selects are navigation, not filter state — the
+  // panel on the home page owns that — so they simply start unset.
+  const countrySlug = "";
+  const categorySlug = "";
 
   if (countries.length === 0 && categories.length === 0) return null;
 
@@ -53,7 +51,7 @@ export function MobileNav({
             id="m-cat"
             value={categorySlug}
             onChange={(e) =>
-              router.push(e.target.value ? `/category/${e.target.value}` : "/")
+              router.push(e.target.value ? `/?category=${e.target.value}` : "/")
             }
           >
             <option value="">All topics</option>
@@ -76,7 +74,7 @@ export function MobileNav({
             id="m-country"
             value={countrySlug}
             onChange={(e) =>
-              router.push(e.target.value ? `/country/${e.target.value}` : "/")
+              router.push(e.target.value ? `/?country=${e.target.value}` : "/")
             }
           >
             <option value="">All countries</option>

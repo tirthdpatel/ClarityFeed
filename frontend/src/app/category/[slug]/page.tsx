@@ -1,59 +1,35 @@
-import type { Metadata } from "next";
-import { DatePicker } from "@/components/DatePicker";
-import { Feed } from "@/components/Feed";
-import { StaleNotice } from "@/components/StaleNotice";
-import { fetchArchive, fetchArticlesSafe, fetchCategories } from "@/lib/api";
+import { permanentRedirect } from "next/navigation";
 
-async function categoryName(slug: string): Promise<string | null> {
-  const categories = await fetchCategories();
-  return categories.find((c) => c.slug === slug)?.name ?? null;
-}
-
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}): Promise<Metadata> {
-  const { slug } = await params;
-  const name = await categoryName(slug);
-  return { title: name ?? "Category" };
-}
-
-export default async function CategoryPage({
+/**
+ * Kept as a redirect, not deleted.
+ *
+ * Browsing by topic used to be its own route, and those URLs are in browser
+ * history, in anything anyone has shared, and in the tags on every article
+ * card rendered before this change. Deleting the route would 404 all of them;
+ * forwarding costs one file and keeps them working.
+ *
+ * 308 rather than 307: the move is permanent, so a client may cache it and
+ * stop asking. Filtering lives on the home page now — one place to browse,
+ * instead of two that could not be combined with each other.
+ *
+ * Other search params are carried through, so a link that already carried a
+ * date or a publisher does not silently lose it on the way.
+ */
+export default async function CategoryRedirect({
   params,
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ cursor?: string; date?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const [{ slug }, { cursor, date }] = await Promise.all([params, searchParams]);
-  const [name, { page, failed }] = await Promise.all([
-    categoryName(slug),
-    fetchArticlesSafe({ category: slug, cursor, date }),
-  ]);
-  const archive = await fetchArchive();
+  const [{ slug }, rest] = await Promise.all([params, searchParams]);
 
-  const heading = name ?? slug.replace(/-/g, " ");
+  const qs = new URLSearchParams();
+  qs.set("category", slug);
+  for (const [key, value] of Object.entries(rest)) {
+    if (key === "category" || value === undefined) continue;
+    qs.set(key, Array.isArray(value) ? value.join(",") : value);
+  }
 
-  return (
-    <>
-      <h1 className="page-title" style={{ textTransform: name ? "none" : "capitalize" }}>
-        {heading}
-      </h1>
-      <p className="page-sub">Stories classified into this category.</p>
-
-      <DatePicker archive={archive} selected={date} basePath={`/category/${slug}`} />
-
-      {date ? null : (
-        <StaleNotice latestPublishedAt={page.articles[0]?.publishedAt ?? null} />
-      )}
-
-      <Feed
-        page={page}
-        failed={failed}
-        emptyMessage={`Nothing classified as ${heading} in the current window.`}
-        moreHref={date ? `/category/${slug}?date=${date}&` : `/category/${slug}?`}
-      />
-    </>
-  );
+  permanentRedirect(`/?${qs.toString()}`);
 }

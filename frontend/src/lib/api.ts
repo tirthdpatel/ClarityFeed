@@ -82,6 +82,9 @@ export interface CategoryRef {
   name: string;
   parentSlug: string | null;
   colorToken: string | null;
+  /** Includes descendants, and counts only articles the feed will serve.
+   *  The API omits entries where this is zero. */
+  articleCount: number;
 }
 
 /** Seconds. Ingestion is hourly, so anything under that is wasted work. */

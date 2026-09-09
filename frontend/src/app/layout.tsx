@@ -68,7 +68,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               </a>
             ))}
             {categories.slice(0, 7).map((c) => (
-              <a className="nav__link" key={c.slug} href={`/category/${c.slug}`}>
+              <a className="nav__link" key={c.slug} href={`/?category=${c.slug}`}>
                 {c.name}
               </a>
             ))}
@@ -77,7 +77,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           {countries.length > 0 ? (
             <nav className="shell nav nav-rail" aria-label="Countries">
               {countries.slice(0, 14).map((c) => (
-                <a className="nav__link" key={c.slug} href={`/country/${c.slug}`}>
+                <a className="nav__link" key={c.slug} href={`/?country=${c.slug}`}>
                   {c.name}
                 </a>
               ))}

@@ -17,7 +17,18 @@ from sqlalchemy.orm import Session
 
 from datetime import date as date_cls, timedelta
 
-from backend.database.orm_models import CategoryDef, Country, Language, Region
+from sqlalchemy import func, select
+
+from backend.database.orm_models import (
+    ArticleCategory,
+    ArticleCountry,
+    CategoryDef,
+    Country,
+    Language,
+    RawArticle,
+    Region,
+    Source,
+)
 from backend.database.session import get_db
 from backend.retention import ARTICLE_DAYS
 
@@ -27,10 +38,44 @@ router = APIRouter(tags=["reference"])
 CACHE_CONTROL = "public, s-maxage=3600, stale-while-revalidate=86400"
 
 
+def _servable_article_ids():
+    """Articles a reader can actually reach: published, from a live source.
+
+    Reference counts have to agree with the feed. Counting rows the feed will
+    not serve produces a navigation entry advertising articles that are not
+    there when you click it.
+    """
+    return (
+        select(RawArticle.id)
+        .join(Source, Source.id == RawArticle.source_id)
+        .where(RawArticle.ingest_status == "PUBLISHED")
+        .where(Source.is_active.is_(True))
+        .where(Source.takedown_requested_at.is_(None))
+    )
+
+
 @router.get("/countries")
 def list_countries(response: Response, db: Session = Depends(get_db)) -> list[dict[str, Any]]:
-    """Enabled countries, grouped by region via `regionCode`."""
+    """Enabled countries that currently have articles, grouped by region.
+
+    Counted live rather than read from `countries.cached_article_count`, which
+    is declared in the schema and never written — it reads 0 for every country,
+    so serving it meant every entry advertised nothing.
+
+    Empty countries are omitted entirely. Retention keeps ten days, and a
+    low-volume country can genuinely have nothing in that window; a nav link to
+    a page that says "nothing here" is worse than no link.
+    """
     regions = {r.id: r for r in db.query(Region).all()}
+
+    counts = dict(
+        db.execute(
+            select(ArticleCountry.country_id, func.count(ArticleCountry.article_id))
+            .where(ArticleCountry.article_id.in_(_servable_article_ids()))
+            .group_by(ArticleCountry.country_id)
+        ).all()
+    )
+
     rows = (
         db.query(Country)
         .filter(Country.is_enabled.is_(True))
@@ -46,15 +91,21 @@ def list_countries(response: Response, db: Session = Depends(get_db)) -> list[di
             "flag": c.flag_emoji,
             "regionCode": regions[c.region_id].code if c.region_id in regions else None,
             "regionName": regions[c.region_id].name if c.region_id in regions else None,
-            "articleCount": c.cached_article_count,
+            "articleCount": counts.get(c.id, 0),
         }
         for c in rows
+        if counts.get(c.id, 0) > 0
     ]
 
 
 @router.get("/categories")
 def list_categories(response: Response, db: Session = Depends(get_db)) -> list[dict[str, Any]]:
-    """Enabled categories. `parentSlug` carries the Technology → AI nesting."""
+    """Enabled categories that have articles. `parentSlug` carries the nesting.
+
+    A root's count includes its descendants, because that is what selecting it
+    does in the feed. Counting only articles tagged on the root itself would
+    report zero for every one of them — the classifier tags leaves.
+    """
     rows = (
         db.query(CategoryDef)
         .filter(CategoryDef.is_enabled.is_(True))
@@ -62,6 +113,25 @@ def list_categories(response: Response, db: Session = Depends(get_db)) -> list[d
         .all()
     )
     by_id = {c.id: c for c in rows}
+
+    direct = dict(
+        db.execute(
+            select(ArticleCategory.category_id, func.count(ArticleCategory.article_id))
+            .where(ArticleCategory.article_id.in_(_servable_article_ids()))
+            .group_by(ArticleCategory.category_id)
+        ).all()
+    )
+
+    # Roll each category's own count up into its ancestors.
+    total = {c.id: direct.get(c.id, 0) for c in rows}
+    for c in rows:
+        parent_id = c.parent_id
+        seen = set()
+        while parent_id in by_id and parent_id not in seen:
+            seen.add(parent_id)  # a malformed cycle must not hang the endpoint
+            total[parent_id] = total.get(parent_id, 0) + direct.get(c.id, 0)
+            parent_id = by_id[parent_id].parent_id
+
     response.headers["Cache-Control"] = CACHE_CONTROL
     return [
         {
@@ -69,8 +139,10 @@ def list_categories(response: Response, db: Session = Depends(get_db)) -> list[d
             "name": c.name,
             "parentSlug": by_id[c.parent_id].slug if c.parent_id in by_id else None,
             "colorToken": c.color_token,
+            "articleCount": total.get(c.id, 0),
         }
         for c in rows
+        if total.get(c.id, 0) > 0
     ]
 
 
