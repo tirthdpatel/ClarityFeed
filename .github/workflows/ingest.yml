@@ -147,6 +147,9 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          # Optional. Unset, the GNews source logs a warning and is skipped,
+          # so a missing secret costs that one source and not the run.
+          GNEWS_API_KEY: ${{ secrets.GNEWS_API_KEY }}
           APP_ENV: production
           PYTHONUNBUFFERED: "1"
           TRIGGER: ${{ github.event_name == 'workflow_dispatch' && 'manual' || 'cron' }}
