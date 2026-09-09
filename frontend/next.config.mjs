@@ -38,6 +38,32 @@ const nextConfig = {
   // deliberate edit here, not a component quietly pointing <img> at a CDN.
   images: { disableStaticImages: false },
 
+  /**
+   * The old browse-by-country and browse-by-topic routes.
+   *
+   * Filtering lives on the home page now, so these forward into it. They are
+   * redirects rather than deletions because those URLs are in browser history,
+   * in anything anyone shared, and in the tags on every article card rendered
+   * before the change.
+   *
+   * Done here rather than with permanentRedirect() in a page, which was the
+   * first attempt and does not do what its name suggests: in a Server
+   * Component Next implements it as a `<meta http-equiv="refresh">` tag, so
+   * the response is a 200 carrying a whole rendered page — including a flash
+   * of the not-found shell — and anything that is not a browser, which is
+   * every crawler and every link checker, simply does not follow it.
+   *
+   * A config redirect is matched at the edge before any rendering happens and
+   * returns a real 308. Next carries the remaining query string across on its
+   * own, so a link that already had a date or publisher on it keeps them.
+   */
+  async redirects() {
+    return [
+      { source: "/country/:slug", destination: "/?country=:slug", permanent: true },
+      { source: "/category/:slug", destination: "/?category=:slug", permanent: true },
+    ];
+  },
+
   async headers() {
     return [
       {
