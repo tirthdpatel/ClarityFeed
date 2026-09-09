@@ -15,8 +15,11 @@ from typing import Any
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
+from datetime import date as date_cls, timedelta
+
 from backend.database.orm_models import CategoryDef, Country, Language, Region
 from backend.database.session import get_db
+from backend.retention import ARTICLE_DAYS
 
 router = APIRouter(tags=["reference"])
 
@@ -90,3 +93,20 @@ def list_languages(response: Response, db: Session = Depends(get_db)) -> list[di
         }
         for lang in rows
     ]
+
+
+@router.get("/archive")
+def archive_window(response: Response) -> dict[str, Any]:
+    """The range of dates that actually have articles behind them.
+
+    The date picker is built from this rather than from a constant in the
+    frontend, so it cannot offer a day whose articles retention has already
+    deleted. One source of truth, in backend/retention.py.
+    """
+    today = date_cls.today()
+    response.headers["Cache-Control"] = "public, s-maxage=300, stale-while-revalidate=3600"
+    return {
+        "days": ARTICLE_DAYS,
+        "earliest": (today - timedelta(days=ARTICLE_DAYS)).isoformat(),
+        "latest": today.isoformat(),
+    }

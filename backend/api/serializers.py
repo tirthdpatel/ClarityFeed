@@ -34,6 +34,7 @@ from backend.database.orm_models import (
     SourcePermission,
     Summary,
 )
+from backend.feedtext import strip_html
 from backend.permissions import Permissions, apply_serialize_gate
 
 logger = logging.getLogger("news.api.serializers")
@@ -148,7 +149,12 @@ def serialize_articles(
         payload: dict[str, Any] = {
             "id": a.id,
             "title": a.title,
-            "description": a.summary_from_feed,
+            # Stripped here, before apply_serialize_gate truncates. The gate
+            # cuts to max_description_chars, and on a source that ships markup
+            # in its feed — The Guardian does, for every item — that budget was
+            # being spent on `<a href="...">` rather than on the sentence the
+            # reader sees. Order matters: strip, then truncate.
+            "description": strip_html(a.summary_from_feed),
             # Full text is never populated here even when permitted. Rendering
             # a publisher's article body on our own domain is reproduction
             # rather than referral, and no source currently licences it.

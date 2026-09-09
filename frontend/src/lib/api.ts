@@ -64,6 +64,19 @@ export interface CountryRef {
   articleCount: number;
 }
 
+export interface SourceRef {
+  id: number;
+  name: string;
+  url: string | null;
+  language: string | null;
+}
+
+export interface ArchiveWindow {
+  days: number;
+  earliest: string;
+  latest: string;
+}
+
 export interface CategoryRef {
   slug: string;
   name: string;
@@ -129,6 +142,12 @@ export const fetchCountries = () =>
 
 export const fetchCategories = () =>
   getOrEmpty<CategoryRef[]>("/categories", REFERENCE_REVALIDATE, []);
+
+export const fetchSources = () =>
+  getOrEmpty<SourceRef[]>("/sources", REFERENCE_REVALIDATE, []);
+
+export const fetchArchive = () =>
+  getOrEmpty<ArchiveWindow | null>("/archive", REFERENCE_REVALIDATE, null);
 
 export async function fetchArticle(id: string): Promise<Article | null> {
   try {

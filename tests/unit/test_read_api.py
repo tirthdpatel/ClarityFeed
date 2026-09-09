@@ -28,6 +28,7 @@ from sqlalchemy.pool import StaticPool
 
 from backend.api.main import app
 from backend.database.orm_models import (
+    ArticleCategory,
     Base,
     CategoryDef,
     Country,
@@ -241,9 +242,23 @@ def test_malformed_cursor_is_rejected_not_silently_reset(client):
     assert client.get("/articles?cursor=not-base64!!").status_code == 400
 
 
-def test_articles_are_newest_first(client):
-    stamps = [a["publishedAt"] for a in client.get("/articles").json()["articles"]]
-    assert stamps == sorted(stamps, reverse=True)
+def test_page_selects_the_newest_articles(client):
+    """Selection is chronological even though display order is not.
+
+    _interleave_by_source reorders within a page, so the page no longer reads
+    strictly newest-first top to bottom. What must stay true is that the page
+    CONTAINS the newest articles — interleaving is a presentation concern and
+    must never change which articles were chosen.
+    """
+    body = client.get("/articles?limit=2").json()
+    picked = {a["id"] for a in body["articles"]}
+
+    everything = client.get("/articles?limit=50").json()["articles"]
+    newest_two = {
+        a["id"]
+        for a in sorted(everything, key=lambda x: x["publishedAt"], reverse=True)[:2]
+    }
+    assert picked == newest_two
 
 
 # -- filters ----------------------------------------------------------------
@@ -295,3 +310,275 @@ def test_reference_endpoints_hide_disabled_rows(client, db_session):
 
     assert [c["iso2"] for c in client.get("/countries").json()] == ["GB"]
     assert [c["slug"] for c in client.get("/categories").json()] == ["world"]
+
+
+# -- category hierarchy -----------------------------------------------------
+
+
+@pytest.fixture
+def taxonomy(db_session):
+    """A two-level taxonomy tagged the way the classifier actually tags:
+    leaves only, never the root."""
+    db_session.add_all(
+        [
+            CategoryDef(id=10, slug="world", name="World", is_enabled=True),
+            CategoryDef(id=11, slug="conflict", name="Conflict",
+                        parent_id=10, is_enabled=True),
+            CategoryDef(id=12, slug="diplomacy", name="Diplomacy",
+                        parent_id=10, is_enabled=True),
+            CategoryDef(id=20, slug="sports", name="Sports", is_enabled=True),
+            CategoryDef(id=21, slug="football", name="Football",
+                        parent_id=20, is_enabled=True),
+        ]
+    )
+    db_session.add_all(
+        [
+            ArticleCategory(article_id=1, category_id=11, is_primary=True),
+            ArticleCategory(article_id=2, category_id=12, is_primary=True),
+            ArticleCategory(article_id=3, category_id=21, is_primary=True),
+        ]
+    )
+    db_session.commit()
+    return db_session
+
+
+def test_parent_category_returns_its_children(client, taxonomy):
+    """The regression that made every top-level nav link render an empty page:
+    the classifier tags leaves, the navigation links roots, and matching the
+    slug exactly found nothing."""
+    ids = {a["id"] for a in client.get("/articles?category=world").json()["articles"]}
+    assert ids == {1, 2}, "parent category did not include its children"
+
+
+def test_leaf_category_still_matches_itself(client, taxonomy):
+    ids = {a["id"] for a in client.get("/articles?category=conflict").json()["articles"]}
+    assert ids == {1}
+
+
+def test_sibling_categories_do_not_leak(client, taxonomy):
+    ids = {a["id"] for a in client.get("/articles?category=sports").json()["articles"]}
+    assert ids == {3}
+
+
+def test_unknown_category_is_empty_not_an_error(client, taxonomy):
+    assert client.get("/articles?category=nonsense").json()["articles"] == []
+
+
+# -- source diversity -------------------------------------------------------
+
+
+def test_page_does_not_run_on_one_publisher(client, db_session):
+    """Feeds arrive in bursts, so chronological order alone let one publisher
+    own the top of the page — production showed nine consecutive Deutsche Welle
+    items out of twenty.
+
+    The mix here mirrors that: one dominant publisher, one middling, one light.
+    Long runs cannot always be avoided (a source holding most of the articles
+    must eventually run consecutively), so what is asserted is the part that
+    matters to a reader — the top of the page is mixed.
+    """
+    now = datetime(2026, 9, 1, 12, 0, 0)
+    burst = []
+    # 6 from source 1, 4 from source 2, 2 from source 3, all newer than the
+    # fixtures so they occupy the head of the feed.
+    for i in range(6):
+        burst.append((300 + i, 1, i))
+    for i in range(4):
+        burst.append((320 + i, 2, i))
+    for i in range(2):
+        burst.append((340 + i, 3, i))
+
+    db_session.add_all(
+        [
+            RawArticle(
+                id=aid, source_id=sid,
+                url=f"https://pub.example/mix-{aid}", url_hash=f"mix{aid}",
+                title=f"Mixed {aid}", published_at=now + timedelta(minutes=60 + n),
+                ingest_status="PUBLISHED",
+            )
+            for aid, sid, n in burst
+        ]
+    )
+    # source 3 is inactive in the base fixture; the feed would exclude it.
+    db_session.get(Source, 3).is_active = True
+    db_session.commit()
+
+    names = [a["source"]["name"] for a in client.get("/articles?limit=12").json()["articles"]]
+
+    assert len(set(names[:3])) == 3, f"top of the page is not mixed: {names[:3]}"
+
+    longest = best = 1
+    for prev, cur in zip(names, names[1:]):
+        longest = longest + 1 if cur == prev else 1
+        best = max(best, longest)
+    assert best <= 4, f"a publisher ran {best} deep: {names}"
+
+
+def test_interleaving_does_not_break_pagination(client, db_session):
+    """Reordering happens within a page, never across one. Walking every page
+    must still visit each article exactly once."""
+    now = datetime(2026, 9, 1, 12, 0, 0)
+    db_session.add_all(
+        [
+            RawArticle(
+                id=200 + i, source_id=(1 if i % 2 else 2),
+                url=f"https://pub.example/pag-{i}", url_hash=f"pag{i}",
+                title=f"Paged {i}", published_at=now + timedelta(minutes=i),
+                ingest_status="PUBLISHED",
+            )
+            for i in range(10)
+        ]
+    )
+    db_session.commit()
+
+    seen, cursor, pages = [], None, 0
+    while pages < 20:
+        url = f"/articles?limit=3{f'&cursor={cursor}' if cursor else ''}"
+        body = client.get(url).json()
+        seen.extend(a["id"] for a in body["articles"])
+        cursor = body["nextCursor"]
+        pages += 1
+        if not cursor:
+            break
+
+    assert len(seen) == len(set(seen)), "pagination repeated an article"
+    total = len(client.get("/articles?limit=50").json()["articles"])
+    assert len(seen) == total, f"walked {len(seen)} of {total} articles"
+
+
+# -- date selection ---------------------------------------------------------
+
+
+def test_date_filter_returns_only_that_day(client, db_session):
+    """A whole UTC day, half-open, so nothing falls between adjacent dates."""
+    from datetime import timezone
+
+    today = datetime.utcnow().date()
+    day = today - timedelta(days=2)
+    db_session.add_all(
+        [
+            # 00:00:00 and 23:59:59 on the target day, plus one second either
+            # side of it. The boundary rows are the point of the test.
+            RawArticle(id=400, source_id=1, url="https://p/d0", url_hash="d0",
+                       title="Midnight exactly",
+                       published_at=datetime(day.year, day.month, day.day, 0, 0, 0),
+                       ingest_status="PUBLISHED"),
+            RawArticle(id=401, source_id=1, url="https://p/d1", url_hash="d1",
+                       title="Last second",
+                       published_at=datetime(day.year, day.month, day.day, 23, 59, 59),
+                       ingest_status="PUBLISHED"),
+            RawArticle(id=402, source_id=1, url="https://p/d2", url_hash="d2",
+                       title="One second before",
+                       published_at=datetime(day.year, day.month, day.day) - timedelta(seconds=1),
+                       ingest_status="PUBLISHED"),
+            RawArticle(id=403, source_id=1, url="https://p/d3", url_hash="d3",
+                       title="Next day",
+                       published_at=datetime(day.year, day.month, day.day) + timedelta(days=1),
+                       ingest_status="PUBLISHED"),
+        ]
+    )
+    db_session.commit()
+
+    ids = {
+        a["id"]
+        for a in client.get(f"/articles?date={day.isoformat()}&limit=50").json()["articles"]
+    }
+    assert 400 in ids and 401 in ids, "day boundaries excluded"
+    assert 402 not in ids and 403 not in ids, "adjacent days leaked in"
+
+
+def test_date_outside_retention_explains_itself(client):
+    """An empty page reads as a quiet news day. Say the archive is shorter."""
+    old = (datetime.utcnow().date() - timedelta(days=60)).isoformat()
+    r = client.get(f"/articles?date={old}")
+    assert r.status_code == 400
+    assert "kept for" in r.json()["detail"]
+
+
+def test_malformed_date_is_rejected(client):
+    assert client.get("/articles?date=09-09-2026").status_code == 400
+    assert client.get("/articles?date=yesterday").status_code == 400
+
+
+def test_archive_window_matches_retention(client):
+    """The picker's range is derived from the retention policy, not restated."""
+    from backend.retention import ARTICLE_DAYS
+
+    body = client.get("/archive").json()
+    assert body["days"] == ARTICLE_DAYS
+    assert body["earliest"] < body["latest"]
+
+
+# -- feed HTML --------------------------------------------------------------
+
+
+def test_markup_in_a_feed_excerpt_is_stripped(client, db_session):
+    """The Guardian ships HTML in every description; it rendered literally."""
+    db_session.add(
+        RawArticle(
+            id=500, source_id=1, url="https://p/html", url_hash="html500",
+            title="Markup test",
+            summary_from_feed=(
+                '<p>Follow the day&apos;s news live</p><ul><li><p>Get our '
+                '<a href="https://x/y?CMP=cvau_sfl">new political email</a></p></li></ul>'
+            ),
+            published_at=datetime(2026, 9, 1, 12, 0, 0), ingest_status="PUBLISHED",
+        )
+    )
+    db_session.commit()
+
+    desc = client.get("/articles/500").json()["description"]
+    assert "<" not in desc and "href" not in desc, desc
+    assert "Follow the day's news live" in desc
+    assert "new political email" in desc
+
+
+def test_excerpt_limit_counts_text_not_tags(client, db_session):
+    """Truncating before stripping spent the whole budget on markup."""
+    db_session.add(
+        RawArticle(
+            id=501, source_id=1, url="https://p/html2", url_hash="html501",
+            title="Budget test",
+            summary_from_feed=(
+                '<a href="https://example.com/a-very-long-tracking-url-'
+                'that-eats-the-entire-character-budget">Real sentence here</a>'
+            ),
+            published_at=datetime(2026, 9, 1, 12, 0, 0), ingest_status="PUBLISHED",
+        )
+    )
+    db_session.add(SourcePermission(source_id=1, max_description_chars=40))
+    db_session.commit()
+
+    desc = client.get("/articles/501").json()["description"]
+    assert "Real sentence here" in desc, f"markup consumed the budget: {desc!r}"
+
+
+# -- multi-select publishers ------------------------------------------------
+
+
+def test_multiple_sources_can_be_selected(client):
+    ids = {a["source"]["id"] for a in client.get("/articles?source=1,2").json()["articles"]}
+    assert ids == {1, 2}
+
+
+def test_single_source_still_works(client):
+    """Existing one-id links must not break when the parameter learns commas."""
+    ids = {a["source"]["id"] for a in client.get("/articles?source=2").json()["articles"]}
+    assert ids == {2}
+
+
+def test_source_list_tolerates_spacing_and_trailing_commas(client):
+    ids = {a["source"]["id"] for a in client.get("/articles?source=1, 2,").json()["articles"]}
+    assert ids == {1, 2}
+
+
+def test_source_list_is_bounded(client):
+    """The value goes straight into an IN clause; unbounded input is a cheap
+    way to make the planner do something expensive."""
+    huge = ",".join(str(i) for i in range(200))
+    assert client.get(f"/articles?source={huge}").status_code == 400
+
+
+def test_source_and_category_compose(client, taxonomy):
+    body = client.get("/articles?source=1&category=world").json()
+    assert all(a["source"]["id"] == 1 for a in body["articles"])

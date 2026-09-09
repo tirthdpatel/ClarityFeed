@@ -35,7 +35,13 @@ logger = logging.getLogger("news.retention")
 
 RAW_HTML_HOURS = 24          # worthless once cleaned; the single biggest win
 UNPROCESSED_DAYS = 7         # PENDING this long means it will never process
-ARTICLE_DAYS = 180           # articles older than this are dropped entirely
+# Ten days. The free tier is 500 MB and ingestion adds roughly 150 articles an
+# hour; at 180 days this table only ever moved in one direction. Ten days is
+# also what the date picker offers, so retention and the UI state the same
+# promise instead of the site advertising dates whose articles have been
+# deleted. Changing one means changing the other — see ARTICLE_HISTORY_DAYS in
+# backend/api/articles.py.
+ARTICLE_DAYS = 10            # articles older than this are dropped entirely
 TRANSLATION_DAYS = 90        # translations age out faster than their articles
 READING_HISTORY_DAYS = 90    # V2 §3.8 — the one user table that grows unbounded
 
@@ -136,6 +142,34 @@ def run_retention(db: Session, now: datetime | None = None, dry_run: bool = Fals
     )
 
     # 4. Old articles. Last, so the cheaper reclaims run even if this is slow.
+    #
+    # Children first, explicitly. Every foreign key pointing at raw_articles is
+    # ON DELETE NO ACTION, so a bare `DELETE FROM raw_articles` raises a
+    # violation the moment an article has a country tag — which is nearly all
+    # of them. This function had that bug from the start and nobody saw it,
+    # because nothing ever called it.
+    #
+    # Explicit deletes rather than switching the constraints to CASCADE: a new
+    # child table added later fails loudly here, which is a better outcome than
+    # a cascade quietly removing rows nobody remembered were connected.
+    doomed = """
+        SELECT id FROM raw_articles
+        WHERE COALESCE(published_at, created_at) < :cutoff
+    """
+    for child, column in (
+        ("article_countries", "article_id"),
+        ("article_categories", "article_id"),
+        ("article_translations", "article_id"),
+        ("categories", "raw_article_id"),
+        ("summaries", "raw_article_id"),
+        ("embeddings", "raw_article_id"),
+        ("cleaned_articles", "raw_article_id"),
+    ):
+        _exec(
+            f"DELETE FROM {child} WHERE {column} IN ({doomed})",
+            {"cutoff": now - timedelta(days=ARTICLE_DAYS)},
+        )
+
     stats.old_articles_deleted = _exec(
         """DELETE FROM raw_articles
            WHERE COALESCE(published_at, created_at) < :cutoff""",

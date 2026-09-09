@@ -156,6 +156,19 @@ jobs:
           SOURCES: ${{ inputs.sources }}
         run: .github/scripts/ci-ingest.sh
 
+      # After ingestion, never before: housekeeping must not be able to cost a
+      # cycle of news. The script swallows its own errors for the same reason.
+      #
+      # backend/retention.py was written in Phase 1 and called from nowhere, so
+      # raw_articles only ever grew — and the delete it would have run was
+      # itself broken, since every foreign key into raw_articles is NO ACTION.
+      - name: Apply retention
+        if: always()
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          APP_ENV: production
+        run: python scripts/retention.py
+
       - name: Summarise
         if: always()
         run: .github/scripts/ci-summary.sh

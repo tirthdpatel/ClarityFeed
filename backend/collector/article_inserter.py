@@ -16,6 +16,7 @@ from backend.compliance import validate_attribution
 from backend.database.models import PipelineStatus
 from backend.database.orm_models import RawArticle
 from backend.urls import url_hash
+from backend.feedtext import strip_html
 
 logger = logging.getLogger("news.collector.article_inserter")
 
@@ -81,7 +82,11 @@ class ArticleInserter:
                     url_hash=article_hash,
                     title=article.get("title", ""),
                     published_at=article.get("published"),
-                    summary_from_feed=article.get("summary", ""),
+                    # Stripped at ingest too, not only on the way out, so the
+                    # column stops accumulating markup that every reader
+                    # then pays to parse. Existing rows are handled by the
+                    # serializer, which strips defensively regardless.
+                    summary_from_feed=strip_html(article.get("summary", "")),
                     status=PipelineStatus.PENDING,
                 )
                 db.add(raw_article)

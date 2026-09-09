@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
+import { DatePicker } from "@/components/DatePicker";
 import { Feed } from "@/components/Feed";
 import { StaleNotice } from "@/components/StaleNotice";
-import { fetchArticlesSafe, fetchCategories } from "@/lib/api";
+import { fetchArchive, fetchArticlesSafe, fetchCategories } from "@/lib/api";
 
 async function categoryName(slug: string): Promise<string | null> {
   const categories = await fetchCategories();
@@ -23,13 +24,14 @@ export default async function CategoryPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ cursor?: string }>;
+  searchParams: Promise<{ cursor?: string; date?: string }>;
 }) {
-  const [{ slug }, { cursor }] = await Promise.all([params, searchParams]);
+  const [{ slug }, { cursor, date }] = await Promise.all([params, searchParams]);
   const [name, { page, failed }] = await Promise.all([
     categoryName(slug),
-    fetchArticlesSafe({ category: slug, cursor }),
+    fetchArticlesSafe({ category: slug, cursor, date }),
   ]);
+  const archive = await fetchArchive();
 
   const heading = name ?? slug.replace(/-/g, " ");
 
@@ -40,13 +42,17 @@ export default async function CategoryPage({
       </h1>
       <p className="page-sub">Stories classified into this category.</p>
 
-      <StaleNotice latestPublishedAt={page.articles[0]?.publishedAt ?? null} />
+      <DatePicker archive={archive} selected={date} basePath={`/category/${slug}`} />
+
+      {date ? null : (
+        <StaleNotice latestPublishedAt={page.articles[0]?.publishedAt ?? null} />
+      )}
 
       <Feed
         page={page}
         failed={failed}
         emptyMessage={`Nothing classified as ${heading} in the current window.`}
-        moreHref={`/category/${slug}?`}
+        moreHref={date ? `/category/${slug}?date=${date}&` : `/category/${slug}?`}
       />
     </>
   );

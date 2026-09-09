@@ -502,3 +502,127 @@ a, button, .nav__link, .tag, .more {
 .skeleton--headline { height: 1.5rem; width: 90%; max-width: 34rem; margin-bottom: 0.7rem; }
 .skeleton--line { height: 0.85rem; width: 100%; max-width: 38rem; margin-bottom: 0.4rem; }
 .skeleton--line-short { width: 60%; }
+
+/* -- date picker ---------------------------------------------------------- */
+
+.datepick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.75rem 0;
+  margin: 0 0 1.5rem;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.datepick__label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+.datepick__input {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.3rem 0.5rem;
+  color: var(--fg);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+}
+.datepick__clear {
+  font: inherit;
+  font-size: 0.83rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.datepick__clear:hover { border-color: var(--fg-faint); color: var(--fg); }
+.datepick__note { font-size: 0.78rem; color: var(--fg-faint); }
+
+/* -- loading skeleton ------------------------------------------------------ */
+
+/*
+ * Shown by Next's loading.tsx the instant a navigation starts, so clicking a
+ * category gives immediate feedback instead of a page that appears to hang
+ * while the server renders. The API is on a free tier that sleeps, and a cold
+ * start is roughly a minute — the skeleton is the difference between "slow"
+ * and "broken".
+ *
+ * Matches the real card's metrics so the layout does not jump when the
+ * articles arrive.
+ */
+.skeleton { list-style: none; margin: 0; padding: 0; }
+.skeleton__item { padding: 1.6rem 0; border-top: 1px solid var(--border); }
+.skeleton__item:first-child { border-top: none; padding-top: 0.25rem; }
+
+.skeleton__line {
+  height: 0.75rem;
+  border-radius: 3px;
+  background: var(--bg-subtle);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+.skeleton__line--meta  { width: 32%; height: 0.6rem; margin-bottom: 0.75rem; }
+.skeleton__line--title { width: 88%; height: 1.15rem; margin-bottom: 0.5rem; }
+.skeleton__line--title2{ width: 62%; height: 1.15rem; margin-bottom: 0.75rem; }
+.skeleton__line--body  { width: 96%; margin-bottom: 0.4rem; }
+.skeleton__line--body2 { width: 78%; }
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
+/* The animation is decoration; the layout does the communicating. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton__line { animation: none; }
+}
+
+/* -- publisher picker ------------------------------------------------------ */
+
+.srcpick {
+  border: none;
+  margin: 0 0 1.5rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.srcpick__legend {
+  padding: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+.srcpick__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin-top: 0.5rem;
+}
+.srcpick__opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.87rem;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.srcpick__opt input { accent-color: var(--accent); cursor: pointer; }
+.srcpick__opt:hover { color: var(--fg); }
+.srcpick__clear {
+  margin-top: 0.6rem;
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.25rem 0.65rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.srcpick__clear:hover { border-color: var(--fg-faint); color: var(--fg); }
