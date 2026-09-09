@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { CategoryRef, CountryRef, SourceRef } from "@/lib/api";
 
@@ -21,6 +22,15 @@ import type { CategoryRef, CountryRef, SourceRef } from "@/lib/api";
  * the back button works, and the server renders the right articles on first
  * paint instead of flashing the unfiltered feed.
  *
+ * But the URL is server state, and a checkbox driven straight from it does not
+ * move until the round trip finishes — on a free-tier API that is a second or
+ * more of a control that visibly ignores you. So the checkboxes render from a
+ * local copy that updates on click, and the navigation happens in a
+ * transition behind it. The local copy is re-synced from the props whenever
+ * the server catches up, which also makes the back button correct: the URL
+ * remains the single source of truth, and this is only ever ahead of it by
+ * one interaction.
+ *
  * Nothing selected in a group means no filter for that group, spelled as the
  * absence of the parameter. That keeps the default URL clean and means a
  * country or publisher added later is included by default rather than being
@@ -40,6 +50,11 @@ export function Filters({
   selected: { country: string[]; category: string[]; source: string[] };
 }) {
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  // Seeded from the URL, ahead of it only while a navigation is in flight.
+  const [draft, setDraft] = useState(selected);
+  useEffect(() => setDraft(selected), [selected]);
 
   const groups: Group[] = [
     {
@@ -68,38 +83,53 @@ export function Filters({
   if (groups.length === 0) return null;
 
   const current: Record<string, string[]> = {
-    country: selected.country,
-    category: selected.category,
-    source: selected.source,
+    country: draft.country,
+    category: draft.category,
+    source: draft.source,
   };
 
-  const apply = (next: Record<string, string[]>) => {
+  const apply = (next: {
+    country: string[];
+    category: string[];
+    source: string[];
+  }) => {
+    setDraft(next); // paint immediately
+
     const qs = new URLSearchParams();
     for (const [key, values] of Object.entries(next)) {
       if (values.length) qs.set(key, values.join(","));
     }
     const query = qs.toString();
-    router.push(query ? `/?${query}` : "/");
+
+    // A transition keeps the current feed interactive while the next one is
+    // fetched, instead of blocking on it.
+    startTransition(() => router.push(query ? `/?${query}` : "/"));
   };
 
   const toggle = (key: string, value: string) => {
     const active = current[key] ?? [];
-    apply({
-      ...current,
-      [key]: active.includes(value)
-        ? active.filter((v) => v !== value)
-        : [...active, value],
-    });
+    const updated = active.includes(value)
+      ? active.filter((v) => v !== value)
+      : [...active, value];
+    apply({ ...(current as never as typeof draft), [key]: updated });
   };
 
   const activeCount =
-    selected.country.length + selected.category.length + selected.source.length;
+    draft.country.length + draft.category.length + draft.source.length;
 
   return (
-    <section className="filters" aria-label="Filter the feed">
+    <section
+      className="filters"
+      aria-label="Filter the feed"
+      data-pending={isPending ? "true" : undefined}
+    >
       <div className="filters__head">
         <h2 className="filters__title">Filter</h2>
-        {activeCount > 0 ? (
+        {isPending ? (
+          <span className="filters__hint" role="status">
+            Updating…
+          </span>
+        ) : activeCount > 0 ? (
           <button
             className="filters__clear"
             type="button"

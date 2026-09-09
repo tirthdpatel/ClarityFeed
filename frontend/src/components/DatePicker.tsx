@@ -1,20 +1,25 @@
 "use client";
 
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { ArchiveWindow } from "@/lib/api";
 
 /**
  * Pick a day to read.
  *
- * The range comes from the API's /archive endpoint, which derives it from the
- * retention policy — so the picker cannot offer a date whose articles have
- * already been deleted. Hardcoding "10 days" here would drift the first time
- * the policy changed, and the failure would look like a broken page rather
- * than a stale constant.
+ * A row of days rather than `<input type="date">`. The native control opens a
+ * month calendar, and with a ten-day archive that means roughly twenty of the
+ * thirty visible cells are greyed out — the widget spends most of its space
+ * showing you what you cannot choose, behind an extra click to open it.
+ * Ten days fit on one line, so every option is visible and one tap away.
  *
- * A plain <input type="date"> rather than a calendar component: it is
- * keyboard-accessible and screen-reader-labelled for free, it uses the
- * viewer's own locale for display, and it costs no JavaScript beyond this.
+ * The range still comes from /archive, which derives it from the retention
+ * policy, so the control cannot offer a day whose articles have been deleted.
+ *
+ * Radio semantics via aria-pressed on buttons: exactly one day is selected at
+ * a time, and buttons carry the label text, which is what a screen reader
+ * announces. Selection paints immediately and navigates in a transition, for
+ * the same reason as the filters — the URL is server state and lags a click.
  */
 export function DatePicker({
   archive,
@@ -26,35 +31,75 @@ export function DatePicker({
   basePath: string;
 }) {
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [draft, setDraft] = useState<string | undefined>(selected);
+  useEffect(() => setDraft(selected), [selected]);
+
   if (!archive) return null;
 
   const go = (value: string) => {
+    setDraft(value || undefined);
     const sep = basePath.includes("?") ? "&" : "?";
-    router.push(value ? `${basePath}${sep}date=${value}` : basePath);
+    const url = value ? `${basePath}${sep}date=${value}` : basePath;
+    startTransition(() => router.push(url));
   };
 
+  // Newest first: "today" is the common case and belongs where the eye lands.
+  const days: string[] = [];
+  const end = new Date(`${archive.latest}T00:00:00Z`);
+  for (let i = 0; i <= archive.days; i += 1) {
+    const d = new Date(end);
+    d.setUTCDate(d.getUTCDate() - i);
+    const iso = d.toISOString().slice(0, 10);
+    if (iso < archive.earliest) break;
+    days.push(iso);
+  }
+
+  const today = archive.latest;
+
   return (
-    <div className="datepick">
-      <label className="datepick__label" htmlFor="date">
-        Read the news from
-      </label>
-      <input
-        className="datepick__input"
-        id="date"
-        type="date"
-        value={selected ?? ""}
-        min={archive.earliest}
-        max={archive.latest}
-        onChange={(e) => go(e.target.value)}
-      />
-      {selected ? (
-        <button className="datepick__clear" type="button" onClick={() => go("")}>
-          Back to latest
+    <nav
+      className="daypick"
+      aria-label="Choose a day"
+      data-pending={isPending ? "true" : undefined}
+    >
+      <span className="daypick__label">Day</span>
+
+      <div className="daypick__days">
+        <button
+          className="daypick__day"
+          type="button"
+          aria-pressed={!draft}
+          onClick={() => go("")}
+        >
+          Latest
         </button>
-      ) : null}
-      <span className="datepick__note">
-        Archive covers the last {archive.days} days.
-      </span>
-    </div>
+
+        {days.map((iso) => (
+          <button
+            className="daypick__day"
+            key={iso}
+            type="button"
+            aria-pressed={draft === iso}
+            onClick={() => go(iso)}
+          >
+            {label(iso, today)}
+          </button>
+        ))}
+      </div>
+    </nav>
   );
+}
+
+/** "Today", then weekday plus day-of-month. Short enough to fit ten across,
+ *  and a weekday is easier to place than a bare date when you are looking for
+ *  "the day before yesterday". */
+function label(iso: string, today: string): string {
+  if (iso === today) return "Today";
+  const d = new Date(`${iso}T00:00:00Z`);
+  return d.toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
 }

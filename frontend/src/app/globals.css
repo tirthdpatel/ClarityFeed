@@ -503,46 +503,71 @@ a, button, .nav__link, .tag, .more {
 .skeleton--line { height: 0.85rem; width: 100%; max-width: 38rem; margin-bottom: 0.4rem; }
 .skeleton--line-short { width: 60%; }
 
-/* -- date picker ---------------------------------------------------------- */
+/* -- day picker ------------------------------------------------------------ */
 
-.datepick {
+.daypick {
   display: flex;
+  align-items: baseline;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 0.75rem;
-  padding: 0.75rem 0;
+  gap: 0.3rem 0.6rem;
+  padding: 0.7rem 0;
   margin: 0 0 1.5rem;
-  border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
 }
-.datepick__label {
+.daypick__label {
   font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
   color: var(--fg-faint);
+  flex: 0 0 auto;
 }
-.datepick__input {
-  font: inherit;
-  font-size: 0.9rem;
-  padding: 0.3rem 0.5rem;
-  color: var(--fg);
-  background: var(--bg-raised);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
+.daypick__days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  min-width: 0;
 }
-.datepick__clear {
+.daypick__day {
   font: inherit;
-  font-size: 0.83rem;
-  padding: 0.3rem 0.7rem;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
+  font-size: 0.8rem;
+  line-height: 1.2;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
   background: var(--bg-raised);
   color: var(--fg-muted);
   cursor: pointer;
+  white-space: nowrap;
 }
-.datepick__clear:hover { border-color: var(--fg-faint); color: var(--fg); }
-.datepick__note { font-size: 0.78rem; color: var(--fg-faint); }
+.daypick__day:hover { border-color: var(--border-strong); color: var(--fg); }
+.daypick__day[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 600;
+}
+
+/*
+ * Pending state, shared by both controls.
+ *
+ * A navigation the reader started is not a loading screen — the current feed
+ * stays readable and interactive. This only says "heard you, working on it",
+ * which is the difference between an interface that feels slow and one that
+ * feels broken. Deliberately subtle: a heavier treatment on every checkbox
+ * click would be its own kind of noise.
+ */
+.filters[data-pending="true"],
+.daypick[data-pending="true"] {
+  opacity: 0.65;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .filters,
+  .daypick {
+    transition: opacity 120ms ease-out;
+  }
+}
 
 /* -- loading skeleton ------------------------------------------------------ */
 
