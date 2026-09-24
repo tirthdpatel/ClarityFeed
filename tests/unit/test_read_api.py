@@ -14,6 +14,16 @@ database — `SELECT DISTINCT` with an ORDER BY over a COALESCE, which Postgres
 refuses and SQLite waves through. The bug reached a deployed cluster before
 anything caught it. Running the same assertions on the dialect that actually
 serves production is the cheapest way to not repeat that.
+
+It caught a second one, which is why the fixtures below flush between adding a
+parent row and adding the child that references it. ArticleCategory and
+ArticleCountry declare ForeignKey columns but no relationship(), and SQLAlchemy
+builds its flush order from relationships, not from bare foreign keys. With no
+dependency edge the mappers go in mapper-sort order, so `article_categories`
+is INSERTed before `category_defs` and `article_countries` before `countries`
+ — children before their parents. SQLite does not enforce foreign keys unless
+asked, so it swallowed that happily; PostgreSQL rejects it. An explicit flush()
+puts the parents in first, in the same transaction.
 """
 from __future__ import annotations
 
@@ -322,6 +332,7 @@ def test_reference_endpoints_hide_disabled_rows(client, db_session):
             CategoryDef(id=2, slug="hidden", name="Hidden", is_enabled=False),
         ]
     )
+    db_session.flush()  # parents before children — see the module docstring
     # Both the enabled and the disabled row have an article, so the only thing
     # separating them in the result is is_enabled.
     db_session.add_all(
@@ -355,6 +366,7 @@ def test_reference_endpoints_hide_empty_rows(client, db_session):
                     slug="fr", is_enabled=True),
         ]
     )
+    db_session.flush()  # parents before children — see the module docstring
     db_session.add(ArticleCountry(article_id=1, country_id=3, relevance="primary"))
     db_session.commit()
 
@@ -372,6 +384,7 @@ def test_country_count_ignores_unpublished_and_dead_sources(client, db_session):
         Country(id=5, iso2="GB", iso3="GBR", name="United Kingdom",
                 slug="gb", is_enabled=True)
     )
+    db_session.flush()  # parents before children — see the module docstring
     db_session.add_all(
         [
             ArticleCountry(article_id=1, country_id=5, relevance="primary"),  # published
@@ -415,6 +428,7 @@ def taxonomy(db_session):
                         parent_id=20, is_enabled=True),
         ]
     )
+    db_session.flush()  # parents before children — see the module docstring
     db_session.add_all(
         [
             ArticleCategory(article_id=1, category_id=11, is_primary=True),
@@ -681,6 +695,7 @@ def test_multiple_countries_widen_the_feed(client, db_session):
             Country(id=12, iso2="FR", iso3="FRA", name="France", slug="fr", is_enabled=True),
         ]
     )
+    db_session.flush()  # parents before children — see the module docstring
     from backend.database.orm_models import ArticleCountry
 
     db_session.add_all(
@@ -700,6 +715,7 @@ def test_country_accepts_slug_or_iso2_in_a_list(client, db_session):
     db_session.add(
         Country(id=13, iso2="JP", iso3="JPN", name="Japan", slug="japan", is_enabled=True)
     )
+    db_session.flush()  # parents before children — see the module docstring
     from backend.database.orm_models import ArticleCountry
 
     db_session.add(ArticleCountry(article_id=1, country_id=13, relevance="primary"))
@@ -722,6 +738,7 @@ def test_country_category_and_source_compose(client, db_session, taxonomy):
     db_session.add(
         Country(id=14, iso2="GB", iso3="GBR", name="United Kingdom", slug="gb", is_enabled=True)
     )
+    db_session.flush()  # parents before children — see the module docstring
     from backend.database.orm_models import ArticleCountry
 
     db_session.add_all(
